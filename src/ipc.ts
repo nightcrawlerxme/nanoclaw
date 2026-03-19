@@ -12,7 +12,11 @@ import { RegisteredGroup } from './types.js';
 
 export interface IpcDeps {
   sendMessage: (jid: string, text: string) => Promise<void>;
-  sendMedia?: (jid: string, filePath: string, caption?: string) => Promise<void>;
+  sendMedia?: (
+    jid: string,
+    filePath: string,
+    caption?: string,
+  ) => Promise<void>;
   registeredGroups: () => Record<string, RegisteredGroup>;
   registerGroup: (jid: string, group: RegisteredGroup) => void;
   syncGroups: (force: boolean) => Promise<void>;
@@ -466,7 +470,10 @@ export async function processTaskIpc(
       }
       // Authorization: non-main groups can only send media to their own JID
       const mediaTargetGroup = registeredGroups[mediaJid];
-      if (!isMain && (!mediaTargetGroup || mediaTargetGroup.folder !== sourceGroup)) {
+      if (
+        !isMain &&
+        (!mediaTargetGroup || mediaTargetGroup.folder !== sourceGroup)
+      ) {
         logger.warn(
           { mediaJid, sourceGroup },
           'Unauthorized send_media attempt blocked',
@@ -476,7 +483,9 @@ export async function processTaskIpc(
       const fp = (data as any).filePath as string;
       const caption = (data as any).caption as string | undefined;
       if (!deps.sendMedia) {
-        logger.warn('send_media IPC received but channel does not support sendMedia');
+        logger.warn(
+          'send_media IPC received but channel does not support sendMedia',
+        );
         break;
       }
       await deps.sendMedia(mediaJid, fp, caption);

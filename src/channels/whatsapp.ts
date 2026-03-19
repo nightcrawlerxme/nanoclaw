@@ -276,6 +276,27 @@ export class WhatsAppChannel implements Channel {
     }
   }
 
+  async sendMedia(
+    jid: string,
+    filePath: string,
+    caption?: string,
+  ): Promise<void> {
+    if (!this.connected) {
+      logger.warn({ jid, filePath }, 'WA disconnected, cannot send media');
+      return;
+    }
+    try {
+      const imageBuffer = fs.readFileSync(filePath);
+      await this.sock.sendMessage(jid, {
+        image: imageBuffer,
+        caption: caption ?? '',
+      });
+      logger.info({ jid, filePath }, 'Media sent');
+    } catch (err) {
+      logger.error({ jid, filePath, err }, 'Failed to send media');
+    }
+  }
+
   isConnected(): boolean {
     return this.connected;
   }
