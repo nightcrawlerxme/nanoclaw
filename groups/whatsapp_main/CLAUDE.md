@@ -68,7 +68,7 @@ For business tasks, dispatch to the WAIT-Tech crew:
 curl -s -X POST http://host.docker.internal:8080/api/task \
   -H "Content-Type: application/json" \
   -d '{"dept": "auto", "request": "YOUR TASK HERE"}' \
-  --max-time 600
+  --max-time 1800
 ```
 
 Departments: `tech` (code/bugs), `government` (tenders), `grants` (IRAP/SR&ED), `sales`, `marketing`, `hr`, `auto`.
