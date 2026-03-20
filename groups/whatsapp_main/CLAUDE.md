@@ -84,10 +84,17 @@ Poll a running task: `curl -s http://host.docker.internal:8080/api/task/result/$
 
 **To cancel a running task** (if Joseph says "cancel" or "stop"):
 ```bash
-# Joseph will say something like "cancel tech-abc123" or "stop that task"
 curl -s -X POST http://host.docker.internal:8080/api/task/cancel/$TASK_ID
 ```
 Always confirm the cancellation back to Joseph.
+
+**To approve a task waiting for Anthropic consent** (if Joseph says "approve task-id"):
+```bash
+curl -s -X POST http://host.docker.internal:8080/api/task/approve/$TASK_ID
+```
+Confirm: "✅ Approved — task will now run using Anthropic Claude."
+
+**LLM policy:** Qwen/Ollama is always used first (free, local). Anthropic Claude is only used as a last resort and *always* requires Joseph's approval first. If a task is in `pending_approval` status, wait for Joseph to reply "approve" or "cancel".
 
 Departments: `tech` (code/bugs), `government` (tenders), `grants` (IRAP/SR&ED), `sales`, `marketing`, `hr`, `auto`.
 
