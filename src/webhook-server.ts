@@ -71,12 +71,17 @@ export function startWebhookServer(
         const channel = findChannel(getChannels(), targetJid);
         if (!channel) {
           res.writeHead(503, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: `No channel owns JID: ${targetJid}` }));
+          res.end(
+            JSON.stringify({ error: `No channel owns JID: ${targetJid}` }),
+          );
           return;
         }
 
         await channel.sendMessage(targetJid, message);
-        logger.info({ targetJid, length: message.length }, 'Webhook message sent');
+        logger.info(
+          { targetJid, length: message.length },
+          'Webhook message sent',
+        );
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ ok: true, jid: targetJid }));
       } catch (err) {

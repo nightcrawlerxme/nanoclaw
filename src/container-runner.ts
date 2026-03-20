@@ -332,7 +332,11 @@ export async function runContainerAgent(
       const chunk = data.toString();
 
       // Detect rate limit events from the agent-runner and surface to caller (once per session)
-      if (!rateLimitFired && chunk.includes('type=rate_limit_event') && onRateLimited) {
+      if (
+        !rateLimitFired &&
+        chunk.includes('type=rate_limit_event') &&
+        onRateLimited
+      ) {
         rateLimitFired = true;
         onRateLimited();
       }

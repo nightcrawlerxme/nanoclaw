@@ -224,36 +224,47 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
         chatJid,
         '_Rate limited by API — will continue automatically in a moment..._',
       )
-      .catch((err) => logger.warn({ chatJid, err }, 'Failed to send rate limit notice'));
+      .catch((err) =>
+        logger.warn({ chatJid, err }, 'Failed to send rate limit notice'),
+      );
   };
 
-  const output = await runAgent(group, prompt, chatJid, async (result) => {
-    // Streaming output callback — called for each agent result
+  const output = await runAgent(
+    group,
+    prompt,
+    chatJid,
+    async (result) => {
+      // Streaming output callback — called for each agent result
 
-    if (result.result) {
-      const raw =
-        typeof result.result === 'string'
-          ? result.result
-          : JSON.stringify(result.result);
-      // Strip <internal>...</internal> blocks — agent uses these for internal reasoning
-      const text = raw.replace(/<internal>[\s\S]*?<\/internal>/g, '').trim();
-      logger.info({ group: group.name }, `Agent output: ${raw.slice(0, 200)}`);
-      if (text) {
-        await channel.sendMessage(chatJid, text);
-        outputSentToUser = true;
+      if (result.result) {
+        const raw =
+          typeof result.result === 'string'
+            ? result.result
+            : JSON.stringify(result.result);
+        // Strip <internal>...</internal> blocks — agent uses these for internal reasoning
+        const text = raw.replace(/<internal>[\s\S]*?<\/internal>/g, '').trim();
+        logger.info(
+          { group: group.name },
+          `Agent output: ${raw.slice(0, 200)}`,
+        );
+        if (text) {
+          await channel.sendMessage(chatJid, text);
+          outputSentToUser = true;
+        }
+        // Only reset idle timer on actual results, not session-update markers (result: null)
+        resetIdleTimer();
       }
-      // Only reset idle timer on actual results, not session-update markers (result: null)
-      resetIdleTimer();
-    }
 
-    if (result.status === 'success') {
-      queue.notifyIdle(chatJid);
-    }
+      if (result.status === 'success') {
+        queue.notifyIdle(chatJid);
+      }
 
-    if (result.status === 'error') {
-      hadError = true;
-    }
-  }, onRateLimited);
+      if (result.status === 'error') {
+        hadError = true;
+      }
+    },
+    onRateLimited,
+  );
 
   await channel.setTyping?.(chatJid, false);
   if (idleTimer) clearTimeout(idleTimer);
@@ -481,10 +492,7 @@ function recoverPendingMessages(): void {
       // Notify the user before re-processing so they know there was a restart
       const channel = findChannel(channels, chatJid);
       channel
-        ?.sendMessage(
-          chatJid,
-          '_Restarted — picking up where I left off..._',
-        )
+        ?.sendMessage(chatJid, '_Restarted — picking up where I left off..._')
         .catch((err) =>
           logger.warn({ chatJid, err }, 'Failed to send recovery notice'),
         );
