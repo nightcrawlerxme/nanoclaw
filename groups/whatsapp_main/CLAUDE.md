@@ -65,11 +65,20 @@ Alternatively, you can use the send_message MCP tool to tell the user the screen
 For business tasks, dispatch to the WAIT-Tech crew:
 
 ```bash
-curl -s -X POST http://host.docker.internal:8080/api/task \
+RESPONSE=$(curl -s -X POST http://host.docker.internal:8080/api/task \
   -H "Content-Type: application/json" \
   -d '{"dept": "auto", "request": "YOUR TASK HERE"}' \
-  --max-time 1800
+  --max-time 1800)
+STATUS=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status',''))" 2>/dev/null)
+RESULT=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('result',''))" 2>/dev/null)
+TASK_ID=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('task_id',''))" 2>/dev/null)
 ```
+
+If `STATUS` is `running_background` or `duplicate`: tell Joseph the result will arrive via WhatsApp and DO NOT retry.
+If `STATUS` is `ok`: format and send `$RESULT` to Joseph.
+If `STATUS` is `error`: apologize and report `$RESULT`.
+
+Poll a running task: `curl -s http://host.docker.internal:8080/api/task/result/$TASK_ID`
 
 Departments: `tech` (code/bugs), `government` (tenders), `grants` (IRAP/SR&ED), `sales`, `marketing`, `hr`, `auto`.
 
@@ -97,6 +106,64 @@ This is the *main channel* with elevated privileges:
 - Can schedule tasks for any group
 - Can register new groups
 - Can send messages to any registered group
+
+## Status Command
+
+When Joseph asks "what's running?", "status", or similar:
+
+```bash
+curl -s http://host.docker.internal:8080/api/status | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+running = d.get('running', [])
+by_status = d.get('by_status', {})
+print(f'Active tasks: {d[\"active_tasks\"]}')
+print(f'Breakdown: {json.dumps(by_status)}')
+for t in running:
+    print(f'  - {t[\"task_id\"]} ({t[\"dept\"]}) since {t[\"created_at\"][:16]}')
+"
+```
+
+Format the result using WhatsApp formatting and send it.
+
+## Daily Summary
+
+To set up an automatic daily summary at 8 AM, create this scheduled task:
+
+```bash
+TARGET_JID=$(python3 -c "
+import json
+groups = json.load(open('/workspace/ipc/available_groups.json'))
+for g in groups.get('groups', []):
+    if g.get('isMain'): print(g['jid']); break
+")
+echo '{
+  "type": "schedule_task",
+  "targetJid": "'"$TARGET_JID"'",
+  "prompt": "Generate a daily summary for Joseph: list all crew tasks run in the past 24h by checking ~/crewops/reports/tasks/ — show task IDs, departments, statuses, and 1-line result previews. Keep it brief.",
+  "schedule_type": "cron",
+  "schedule_value": "0 8 * * *",
+  "context_mode": "isolated"
+}' > /workspace/ipc/tasks/daily_summary_$(date +%s).json
+```
+
+## Conversation History Search
+
+To search past conversations (e.g. "what did we decide about EventBox pricing?"):
+
+```bash
+python3 -c "
+import sqlite3, sys
+keyword = 'YOUR SEARCH TERM'
+db = sqlite3.connect('/workspace/conversations/messages.db') if __import__('os').path.exists('/workspace/conversations/messages.db') else None
+# Fallback: grep the conversations folder
+" 2>/dev/null || grep -ri "YOUR SEARCH TERM" /workspace/conversations/ 2>/dev/null | head -20
+```
+
+Or search crew task results:
+```bash
+grep -ri "YOUR SEARCH TERM" ~/crewops/reports/tasks/ 2>/dev/null | head -10
+```
 
 ## Memory
 

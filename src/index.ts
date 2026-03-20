@@ -212,8 +212,22 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
   let hadError = false;
   let outputSentToUser = false;
 
+  // Notify user once if Claude API rate-limits this session
+  let rateLimitNotified = false;
+  const onRateLimited = () => {
+    if (rateLimitNotified) return;
+    rateLimitNotified = true;
+    channel
+      .sendMessage(
+        chatJid,
+        '_Rate limited by API — will continue automatically in a moment..._',
+      )
+      .catch((err) => logger.warn({ chatJid, err }, 'Failed to send rate limit notice'));
+  };
+
   const output = await runAgent(group, prompt, chatJid, async (result) => {
     // Streaming output callback — called for each agent result
+
     if (result.result) {
       const raw =
         typeof result.result === 'string'
@@ -237,7 +251,7 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
     if (result.status === 'error') {
       hadError = true;
     }
-  });
+  }, onRateLimited);
 
   await channel.setTyping?.(chatJid, false);
   if (idleTimer) clearTimeout(idleTimer);
@@ -270,6 +284,7 @@ async function runAgent(
   prompt: string,
   chatJid: string,
   onOutput?: (output: ContainerOutput) => Promise<void>,
+  onRateLimited?: () => void,
 ): Promise<'success' | 'error'> {
   const isMain = group.isMain === true;
   const sessionId = sessions[group.folder];
@@ -324,6 +339,7 @@ async function runAgent(
       (proc, containerName) =>
         queue.registerProcess(chatJid, proc, containerName, group.folder),
       wrappedOnOutput,
+      onRateLimited,
     );
 
     if (output.newSessionId) {
@@ -460,6 +476,16 @@ function recoverPendingMessages(): void {
         { group: group.name, pendingCount: pending.length },
         'Recovery: found unprocessed messages',
       );
+      // Notify the user before re-processing so they know there was a restart
+      const channel = findChannel(channels, chatJid);
+      channel
+        ?.sendMessage(
+          chatJid,
+          '_Restarted — picking up where I left off..._',
+        )
+        .catch((err) =>
+          logger.warn({ chatJid, err }, 'Failed to send recovery notice'),
+        );
       queue.enqueueMessageCheck(chatJid);
     }
   }

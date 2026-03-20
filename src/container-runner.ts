@@ -269,6 +269,7 @@ export async function runContainerAgent(
   input: ContainerInput,
   onProcess: (proc: ChildProcess, containerName: string) => void,
   onOutput?: (output: ContainerOutput) => Promise<void>,
+  onRateLimited?: () => void,
 ): Promise<ContainerOutput> {
   const startTime = Date.now();
 
@@ -326,8 +327,15 @@ export async function runContainerAgent(
     let newSessionId: string | undefined;
     let outputChain = Promise.resolve();
 
+    let rateLimitFired = false;
     container.stdout.on('data', (data) => {
       const chunk = data.toString();
+
+      // Detect rate limit events from the agent-runner and surface to caller (once per session)
+      if (!rateLimitFired && chunk.includes('type=rate_limit_event') && onRateLimited) {
+        rateLimitFired = true;
+        onRateLimited();
+      }
 
       // Always accumulate for logging
       if (!stdoutTruncated) {
