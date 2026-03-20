@@ -172,6 +172,13 @@ curl -s -X POST http://host.docker.internal:8080/api/services/restart \
 # Available services: nanoclaw, openhands, crewops
 ```
 
+*Service name reference* (systemd on host):
+- crewops dashboard → `agent-dashboard` (NOT "crewops")
+- OpenHands → `openhands-backend`
+- NanoClaw → `nanoclaw`
+
+Never tell Joseph to run `systemctl --user restart crewops` — the correct command is `systemctl --user restart agent-dashboard`.
+
 The watchdog in the crew dashboard also auto-restarts services every 5 minutes — so if you see something down, wait 5 min and re-check before asking Joseph to intervene.
 
 If a service fails to restart automatically after 2 attempts, Joseph gets a WhatsApp notification automatically.
