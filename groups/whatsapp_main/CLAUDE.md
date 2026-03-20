@@ -80,6 +80,15 @@ If `STATUS` is `error`: apologize and report `$RESULT`.
 
 Poll a running task: `curl -s http://host.docker.internal:8080/api/task/result/$TASK_ID`
 
+**While a task runs, Joseph gets a WhatsApp update every 60 seconds automatically** — no need to check manually.
+
+**To cancel a running task** (if Joseph says "cancel" or "stop"):
+```bash
+# Joseph will say something like "cancel tech-abc123" or "stop that task"
+curl -s -X POST http://host.docker.internal:8080/api/task/cancel/$TASK_ID
+```
+Always confirm the cancellation back to Joseph.
+
 Departments: `tech` (code/bugs), `government` (tenders), `grants` (IRAP/SR&ED), `sales`, `marketing`, `hr`, `auto`.
 
 ## Communication
