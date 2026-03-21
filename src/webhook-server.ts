@@ -48,7 +48,9 @@ export function startWebhookServer(
         const { message, file_path, caption } = payload;
         if (!message && !file_path) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'message or file_path is required' }));
+          res.end(
+            JSON.stringify({ error: 'message or file_path is required' }),
+          );
           return;
         }
 
@@ -82,7 +84,9 @@ export function startWebhookServer(
         if (file_path) {
           if (!channel.sendMedia) {
             res.writeHead(503, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: 'Channel does not support sendMedia' }));
+            res.end(
+              JSON.stringify({ error: 'Channel does not support sendMedia' }),
+            );
             return;
           }
           await channel.sendMedia(targetJid, file_path, caption);
