@@ -4,6 +4,7 @@ import path from 'path';
 import {
   ASSISTANT_NAME,
   CREDENTIAL_PROXY_PORT,
+  DATA_DIR,
   IDLE_TIMEOUT,
   POLL_INTERVAL,
   TIMEZONE,
@@ -221,17 +222,37 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
 
   // Notify user once if Claude API rate-limits this session
   let rateLimitNotified = false;
-  const onRateLimited = () => {
+  const onRateLimited = async () => {
     if (rateLimitNotified) return;
     rateLimitNotified = true;
     // Clear session so the next invocation starts fresh after the rate limit resets,
     // preventing the agent from resuming a stale incomplete task.
     delete sessions[group.folder];
     deleteSession(group.folder);
+
+    // Try Ollama as fallback before declaring rate-limited to user
+    try {
+      const resp = await fetch('http://localhost:11434/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'qwen2.5:14b', prompt, stream: false }),
+        signal: AbortSignal.timeout(60_000),
+      });
+      if (resp.ok) {
+        const data = await resp.json() as { response?: string };
+        const text = data.response?.trim();
+        if (text) {
+          await channel.sendMessage(chatJid, `_(Ollama — Claude rate limited, resets midnight)_\n\n${text}`);
+          outputSentToUser = true;
+          return;
+        }
+      }
+    } catch { /* Ollama unavailable — fall through */ }
+
     channel
       .sendMessage(
         chatJid,
-        '_Rate limited by API — will continue automatically in a moment..._',
+        '_Rate limited by Claude API — resets 12am (America/Vancouver). Will resume automatically._',
       )
       .catch((err) =>
         logger.warn({ chatJid, err }, 'Failed to send rate limit notice'),
@@ -306,10 +327,26 @@ async function runAgent(
   prompt: string,
   chatJid: string,
   onOutput?: (output: ContainerOutput) => Promise<void>,
-  onRateLimited?: () => void,
+  onRateLimited?: () => void | Promise<void>,
 ): Promise<'success' | 'error'> {
   const isMain = group.isMain === true;
-  const sessionId = sessions[group.folder];
+  let sessionId: string | undefined = sessions[group.folder];
+
+  // Guard: reset session if JSONL exceeds 200 KB to prevent token bloat
+  if (sessionId) {
+    const jsonlPath = path.join(
+      DATA_DIR, 'sessions', group.folder, '.claude',
+      'projects', '-workspace-group', `${sessionId}.jsonl`,
+    );
+    try {
+      if (fs.statSync(jsonlPath).size > 200 * 1024) {
+        logger.warn({ group: group.name }, 'Session JSONL >200 KB — resetting to prevent token bloat');
+        delete sessions[group.folder];
+        deleteSession(group.folder);
+        sessionId = undefined;
+      }
+    } catch { /* file not yet created — fine */ }
+  }
 
   // Update tasks snapshot for container to read (filtered by group)
   const tasks = getAllTasks();
