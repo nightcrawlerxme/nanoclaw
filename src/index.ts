@@ -239,15 +239,20 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
         signal: AbortSignal.timeout(60_000),
       });
       if (resp.ok) {
-        const data = await resp.json() as { response?: string };
+        const data = (await resp.json()) as { response?: string };
         const text = data.response?.trim();
         if (text) {
-          await channel.sendMessage(chatJid, `_(Ollama — Claude rate limited, resets midnight)_\n\n${text}`);
+          await channel.sendMessage(
+            chatJid,
+            `_(Ollama — Claude rate limited, resets midnight)_\n\n${text}`,
+          );
           outputSentToUser = true;
           return;
         }
       }
-    } catch { /* Ollama unavailable — fall through */ }
+    } catch {
+      /* Ollama unavailable — fall through */
+    }
 
     channel
       .sendMessage(
@@ -335,17 +340,27 @@ async function runAgent(
   // Guard: reset session if JSONL exceeds 200 KB to prevent token bloat
   if (sessionId) {
     const jsonlPath = path.join(
-      DATA_DIR, 'sessions', group.folder, '.claude',
-      'projects', '-workspace-group', `${sessionId}.jsonl`,
+      DATA_DIR,
+      'sessions',
+      group.folder,
+      '.claude',
+      'projects',
+      '-workspace-group',
+      `${sessionId}.jsonl`,
     );
     try {
       if (fs.statSync(jsonlPath).size > 200 * 1024) {
-        logger.warn({ group: group.name }, 'Session JSONL >200 KB — resetting to prevent token bloat');
+        logger.warn(
+          { group: group.name },
+          'Session JSONL >200 KB — resetting to prevent token bloat',
+        );
         delete sessions[group.folder];
         deleteSession(group.folder);
         sessionId = undefined;
       }
-    } catch { /* file not yet created — fine */ }
+    } catch {
+      /* file not yet created — fine */
+    }
   }
 
   // Update tasks snapshot for container to read (filtered by group)
@@ -784,11 +799,12 @@ async function main(): Promise<void> {
   });
 }
 
-// Guard: only run when executed directly, not when imported by tests
+// Guard: only run when executed directly, not when imported by tests.
+// Resolve symlinks on both sides so that running via a symlink path still works.
 const isDirectRun =
   process.argv[1] &&
-  new URL(import.meta.url).pathname ===
-    new URL(`file://${process.argv[1]}`).pathname;
+  fs.realpathSync(new URL(import.meta.url).pathname) ===
+    fs.realpathSync(new URL(`file://${process.argv[1]}`).pathname);
 
 if (isDirectRun) {
   main().catch((err) => {
