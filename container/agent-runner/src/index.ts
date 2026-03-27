@@ -409,6 +409,7 @@ async function runQuery(
         'NotebookEdit',
         'mcp__nanoclaw__*',
         'mcp__gws__*',
+        'mcp__outlook__*',
       ],
       env: sdkEnv,
       permissionMode: 'bypassPermissions',
@@ -430,6 +431,15 @@ async function runQuery(
           env: {
             NANOCLAW_CHAT_JID: containerInput.chatJid,
             NANOCLAW_GROUP_FOLDER: containerInput.groupFolder,
+          },
+        },
+        outlook: {
+          command: 'npx',
+          args: ['-y', 'outlook-mcp'],
+          env: {
+            MS_CLIENT_ID: process.env.MS_CLIENT_ID || '',
+            MS_CLIENT_SECRET: process.env.MS_CLIENT_SECRET || '',
+            HOME: '/home/node',
           },
         },
       },
