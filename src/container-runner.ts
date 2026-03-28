@@ -199,7 +199,7 @@ function buildVolumeMounts(
 
   // Google Workspace CLI credentials (read-only)
   // gws uses ~/.config/gws/ for OAuth tokens and client config
-  const gwsConfigDir = path.join(process.env.HOME || '/root', '.config', 'gws');
+  const gwsConfigDir = path.join(homeDir, '.config', 'gws');
   if (fs.existsSync(gwsConfigDir)) {
     mounts.push({
       hostPath: gwsConfigDir,
