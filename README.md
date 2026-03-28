@@ -92,6 +92,27 @@ Then run `/setup`. Claude Code handles everything: dependencies, authentication,
 - **Agent Swarms** - Spin up teams of specialized agents that collaborate on complex tasks
 - **Optional integrations** - Add Gmail (`/add-gmail`) and more via skills
 
+## Autonomous Intelligence Features
+
+NanoClaw includes a set of optional features that give it emergent, self-regulating behavior — memory that degrades and reforms, signals that spread across groups, and awareness that compounds over time.
+
+| Feature | Description |
+|---------|-------------|
+| **Biological Task Lifecycle** | Tasks age through states: `born → active → stalled → dying → dead → fossilized`. Dead tasks are archived with full context snapshots in `task_fossils`. |
+| **Whisper Network** | Groups emit time-decaying signals (whispers) that are injected as context into other groups' prompts. Signals decay linearly and expire automatically. |
+| **Temporal Debt Engine** | Unresolved obligations are tracked with scores that compound with escalation count (capped at 100). High-debt items trigger alerts to the group. |
+| **Circadian Consolidation** | A nightly cron job synthesizes all group `CLAUDE.md` files, prunes stale memory blocks, and generates a digest — all via a dedicated off-peak container. |
+| **Memory Ecology** | `CLAUDE.md` memory blocks carry fitness scores (frequency × recency − contradictions). Low-fitness memories are pruned by the circadian job. |
+| **Narrative Continuity** | Groups maintain a `NARRATIVE.md` event journal (`task_complete`, `milestone`, `failure`, `insight`) that the consolidation job folds into a running narrative. |
+| **Emergence Detection** | A weekly job reads all `NARRATIVE.md` and `CLAUDE.md` files across groups and surfaces cross-group patterns to the main group. |
+| **Semantic Gravity Map** | A concept co-occurrence graph (`groups/global/semantic-graph.json`) grows as agents work. Top concepts are injected into consolidation prompts. |
+| **Shadow Mode** | New groups observe silently — responses are stored but not sent — until a configurable message threshold. Auto-activates with no manual intervention. |
+| **Metacognitive Uncertainty** | Agents log confidence scores and uncertainty sources per response. A weekly report aggregates patterns and surfaces recurring blind spots. |
+| **Container Archaeology** | Parses container run logs to compute p50/p95 latency, slow task counts, and silent failures. Results are written to `groups/{folder}/PERFORMANCE.md`. |
+| **Adversarial Twin** | An optional skeptic container reviews agent responses and feeds rebuttals back for a second-pass refinement. Enabled per-group via `adversarial-twin.json`. |
+
+All features use the existing SQLite DB (automatic migrations), the IPC file-watching system, and the scheduler loop — no new infrastructure required.
+
 ## Usage
 
 Talk to your assistant with the trigger word (default: `@Andy`):
@@ -167,6 +188,19 @@ Key files:
 - `src/task-scheduler.ts` - Runs scheduled tasks
 - `src/db.ts` - SQLite operations (messages, groups, sessions, state)
 - `groups/*/CLAUDE.md` - Per-group memory
+- `src/task-lifecycle.ts` - Biological task lifecycle state machine
+- `src/whispers.ts` - Cross-group signal propagation and decay
+- `src/temporal-debt.ts` - Obligation tracking with escalating scores
+- `src/circadian.ts` - Nightly consolidation scheduler
+- `src/memory-ecology.ts` - Fitness-scored memory pruning
+- `src/narrative.ts` - Event journal and NARRATIVE.md management
+- `src/emergence.ts` - Weekly cross-group pattern detection
+- `src/semantic-graph.ts` - Concept co-occurrence graph
+- `src/shadow-mode.ts` - Silent-observation onboarding for new groups
+- `src/uncertainty.ts` - Confidence logging and uncertainty reports
+- `src/archaeology.ts` - Container log analysis and PERFORMANCE.md
+- `src/adversarial-twin.ts` - Skeptic second-pass refinement
+- `src/consolidation-runner.ts` - Off-peak consolidation container executor
 
 ## FAQ
 
