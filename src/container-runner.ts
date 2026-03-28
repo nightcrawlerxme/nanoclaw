@@ -271,18 +271,6 @@ function buildContainerArgs(
     args.push('-e', 'CLAUDE_CODE_OAUTH_TOKEN=placeholder');
   }
 
-  // Outlook MCP credentials (client ID / secret for Microsoft Graph API)
-  const outlookEnvPath = path.join(os.homedir(), '.outlook-mcp', '.env');
-  if (fs.existsSync(outlookEnvPath)) {
-    const envContent = fs.readFileSync(outlookEnvPath, 'utf-8');
-    for (const line of envContent.split('\n')) {
-      const match = line.match(/^(MS_CLIENT_ID|MS_CLIENT_SECRET)=(.+)$/);
-      if (match) {
-        args.push('-e', `${match[1]}=${match[2].trim()}`);
-      }
-    }
-  }
-
   // Runtime-specific args for host gateway resolution
   args.push(...hostGatewayArgs());
 

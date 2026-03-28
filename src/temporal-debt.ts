@@ -155,7 +155,8 @@ export function startDebtMonitorLoop(
     setTimeout(loop, pollIntervalMs);
   };
 
-  loop();
+  // Delay first run so the system is fully initialized before sending alerts
+  setTimeout(loop, pollIntervalMs);
 }
 
 /** @internal - for tests only. */

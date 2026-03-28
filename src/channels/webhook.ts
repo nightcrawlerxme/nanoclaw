@@ -35,14 +35,17 @@ export class WebhookChannel implements Channel {
   private port: number;
   /** JID of a linked channel where outbound messages are forwarded. */
   private linkedJid: string;
+  /** Optional shared secret for Bearer token auth on inbound requests. */
+  private secret: string;
   /** Reference to sendMessage of a sibling channel — set after connect. */
   private siblingChannels: Channel[] = [];
   /** Plugin routes registered by skills */
   private routes: WebhookRoute[] = [];
 
-  constructor(port: number, linkedJid: string, opts: WebhookChannelOpts) {
+  constructor(port: number, linkedJid: string, secret: string, opts: WebhookChannelOpts) {
     this.port = port;
     this.linkedJid = linkedJid;
+    this.secret = secret;
     this.opts = opts;
   }
 
@@ -59,11 +62,21 @@ export class WebhookChannel implements Channel {
 
   async connect(): Promise<void> {
     this.server = http.createServer((req, res) => {
-      // Health check
+      // Health check (unauthenticated)
       if (req.method === 'GET' && req.url === '/health') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ status: 'ok' }));
         return;
+      }
+
+      // Validate Bearer token when a secret is configured
+      if (this.secret) {
+        const auth = req.headers['authorization'];
+        if (auth !== `Bearer ${this.secret}`) {
+          res.writeHead(401, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Unauthorized' }));
+          return;
+        }
       }
 
       // Check plugin routes first, then fall back to generic /webhook
@@ -202,7 +215,7 @@ export function getWebhookChannel(): WebhookChannel | null {
 }
 
 registerChannel('webhook', (opts: ChannelOpts) => {
-  const envVars = readEnvFile(['WEBHOOK_PORT', 'WEBHOOK_LINKED_JID']);
+  const envVars = readEnvFile(['WEBHOOK_PORT', 'WEBHOOK_LINKED_JID', 'WEBHOOK_SECRET']);
   const port = parseInt(
     process.env.WEBHOOK_PORT || envVars.WEBHOOK_PORT || String(DEFAULT_PORT),
     10,
@@ -213,6 +226,10 @@ registerChannel('webhook', (opts: ChannelOpts) => {
     logger.warn('Webhook: WEBHOOK_LINKED_JID not set — skipping');
     return null;
   }
-  webhookInstance = new WebhookChannel(port, linkedJid, opts);
+  const secret = process.env.WEBHOOK_SECRET || envVars.WEBHOOK_SECRET || '';
+  if (!secret) {
+    logger.warn('Webhook: WEBHOOK_SECRET not set — endpoint is unauthenticated');
+  }
+  webhookInstance = new WebhookChannel(port, linkedJid, secret, opts);
   return webhookInstance;
 });
