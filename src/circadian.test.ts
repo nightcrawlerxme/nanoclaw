@@ -24,10 +24,11 @@ const TEST_CONFIG: CircadianConfig = {
 describe('circadian', () => {
   beforeEach(() => _initTestDatabase());
 
-  it("scheduleCircadianTask creates exactly one cron row with group_folder='consolidation'", () => {
+  it("scheduleCircadianTask creates exactly one cron row with id='circadian-nightly'", () => {
     scheduleCircadianTask(TEST_CONFIG, fakeQueue, fakeSend);
     const tasks = getTasksForGroup(CONSOLIDATION_FOLDER);
     expect(tasks).toHaveLength(1);
+    expect(tasks[0].id).toBe('circadian-nightly');
     expect(tasks[0].group_folder).toBe(CONSOLIDATION_FOLDER);
     expect(tasks[0].schedule_type).toBe('cron');
     expect(tasks[0].status).toBe('active');

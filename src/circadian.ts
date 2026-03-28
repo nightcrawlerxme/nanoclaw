@@ -1,6 +1,6 @@
 import { CronExpressionParser } from 'cron-parser';
 
-import { getDb, createTask, getTasksForGroup } from './db.js';
+import { getDb, createTask } from './db.js';
 import { CONSOLIDATION_FOLDER } from './consolidation-runner.js';
 import { TIMEZONE } from './config.js';
 import { logger } from './logger.js';
@@ -22,14 +22,11 @@ export function scheduleCircadianTask(
   queue: GroupQueue,
   sendMessage: (jid: string, text: string) => Promise<void>,
 ): void {
-  const existing = getTasksForGroup(CONSOLIDATION_FOLDER).find(
-    (t) => t.schedule_type === 'cron' && t.status === 'active',
-  );
+  const existing = getDb()
+    .prepare('SELECT id FROM scheduled_tasks WHERE id = ?')
+    .get('circadian-nightly');
   if (existing) {
-    logger.debug(
-      { taskId: existing.id },
-      'Circadian consolidation task already scheduled, skipping',
-    );
+    logger.debug('Circadian consolidation task already scheduled, skipping');
     return;
   }
 
@@ -44,7 +41,7 @@ export function scheduleCircadianTask(
   const currentDate = now.split('T')[0];
 
   createTask({
-    id: 'circadian-' + Date.now(),
+    id: 'circadian-nightly',
     group_folder: CONSOLIDATION_FOLDER,
     chat_jid: config.digestTargetJid || '',
     prompt: buildCircadianPrompt([], currentDate),

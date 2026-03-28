@@ -70,7 +70,11 @@ import { scheduleEmergenceTask } from './emergence.js';
 import { scheduleUncertaintyReport } from './uncertainty.js';
 import { scheduleArchaeologyTask } from './archaeology.js';
 import { ensureNarrativeFile } from './narrative.js';
-import { isGroupInShadowMode, storeShadowResponse, incrementShadowMessageCount } from './shadow-mode.js';
+import {
+  isGroupInShadowMode,
+  storeShadowResponse,
+  incrementShadowMessageCount,
+} from './shadow-mode.js';
 import { Channel, NewMessage, RegisteredGroup } from './types.js';
 import { logger } from './logger.js';
 
@@ -183,6 +187,9 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
   }
 
   const isMainGroup = group.isMain === true;
+  // Snapshot shadow mode once so mid-stream activation can't split a response
+  // between stored (shadow) and sent (live) chunks.
+  const isShadowMode = isGroupInShadowMode(chatJid);
 
   const sinceTimestamp = lastAgentTimestamp[chatJid] || '';
   const missedMessages = getMessagesSince(
@@ -300,10 +307,10 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
           `Agent output: ${raw.slice(0, 200)}`,
         );
         if (text) {
-          // Shadow mode: store response instead of sending it
-          if (isGroupInShadowMode(chatJid)) {
+          // Use the pre-snapshotted shadow flag so mid-stream activation
+          // cannot split a single response between stored and live chunks.
+          if (isShadowMode) {
             storeShadowResponse(group.folder, chatJid, prompt, text);
-            incrementShadowMessageCount(chatJid);
             outputSentToUser = true; // Treat as sent to avoid cursor rollback
           } else {
             await channel.sendMessage(chatJid, text);
@@ -327,6 +334,12 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
 
   await channel.setTyping?.(chatJid, false);
   if (idleTimer) clearTimeout(idleTimer);
+
+  // Increment shadow count once per message turn (not per chunk) so
+  // the threshold check fires at the correct granularity.
+  if (isShadowMode) {
+    incrementShadowMessageCount(chatJid);
+  }
 
   if (output === 'error' || hadError) {
     // If we already sent output to the user, don't roll back the cursor —
@@ -835,7 +848,11 @@ async function main(): Promise<void> {
   };
 
   scheduleCircadianTask(
-    { cronExpr: '0 3 * * *', timezone: TIMEZONE, digestTargetJid: mainGroupJid || undefined },
+    {
+      cronExpr: '0 3 * * *',
+      timezone: TIMEZONE,
+      digestTargetJid: mainGroupJid || undefined,
+    },
     queue,
     sendMessageFn,
   );
