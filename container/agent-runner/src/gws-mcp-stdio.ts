@@ -196,7 +196,7 @@ async function execGws(args: string[], timeoutMs: number): Promise<{ stdout: str
       resolve({
         stdout: output,
         stderr: stderr || '',
-        exitCode: error ? (error as NodeJS.ErrnoException & { code?: number }).code === 'ETIMEDOUT' ? 124 : 1 : 0,
+        exitCode: error ? ((error as any).killed ? 124 : 1) : 0,
       });
     });
   });
