@@ -113,7 +113,9 @@ export function injectWhisperContext(
   groupFolder: string,
   existingPrompt: string,
 ): string {
-  const whispers = getActiveWhispers({ minStrength: 0.1, limit: 10 });
+  const whispers = getActiveWhispers({ minStrength: 0.1, limit: 10 }).filter(
+    (w) => w.source_group_folder !== groupFolder,
+  );
 
   if (whispers.length === 0) {
     return existingPrompt;

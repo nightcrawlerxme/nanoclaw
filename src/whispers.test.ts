@@ -196,6 +196,16 @@ describe('whispers', () => {
     expect(result).toBe(original);
   });
 
+  it('injectWhisperContext excludes whispers from the same group', () => {
+    emitWhisper('group-a', 'self signal');
+    emitWhisper('group-b', 'foreign signal');
+
+    // group-a should only see group-b's whisper, not its own
+    const result = injectWhisperContext('group-a', 'prompt');
+    expect(result).toContain('foreign signal');
+    expect(result).not.toContain('self signal');
+  });
+
   it('startWhisperDecayLoop is idempotent (second call no-ops)', () => {
     startWhisperDecayLoop({ pollIntervalMs: 60000 });
     startWhisperDecayLoop({ pollIntervalMs: 60000 });
