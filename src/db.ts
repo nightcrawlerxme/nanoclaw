@@ -834,8 +834,8 @@ export function setRegisteredGroup(jid: string, group: RegisteredGroup): void {
        container_config = excluded.container_config,
        requires_trigger = excluded.requires_trigger,
        is_main = excluded.is_main,
-       shadow_mode = excluded.shadow_mode,
-       shadow_activation_threshold = excluded.shadow_activation_threshold`,
+       shadow_mode = COALESCE(excluded.shadow_mode, shadow_mode),
+       shadow_activation_threshold = COALESCE(excluded.shadow_activation_threshold, shadow_activation_threshold)`,
   ).run(
     jid,
     group.name,
