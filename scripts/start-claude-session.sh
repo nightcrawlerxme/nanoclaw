@@ -3,7 +3,7 @@
 # Supervised by com.gabrielratner.claude-remote launchd agent (KeepAlive=true).
 # launchd handles lifecycle — if Claude exits, launchd restarts this script.
 
-export PATH="/Users/gabrielratner/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
 
 LOG="$HOME/NanoClaw/logs/claude-autostart.log"
 exec >> "$LOG" 2>&1
@@ -24,6 +24,6 @@ done
 sleep 5
 
 echo "$(date): claude-autostart: launching Claude..."
-exec /Users/gabrielratner/.local/bin/claude \
+exec claude \
   --dangerously-skip-permissions \
   --channels plugin:telegram@claude-plugins-official

@@ -3,8 +3,8 @@
 # Usage: sudo bash ~/NanoClaw/scripts/install-weekly-restart.sh
 
 set -e
-PLIST_SRC="$HOME/NanoClaw/scripts/com.gabrielratner.weekly-restart.plist"
-PLIST_DST="/Library/LaunchDaemons/com.gabrielratner.weekly-restart.plist"
+PLIST_SRC="$HOME/NanoClaw/scripts/com.nanoclaw.weekly-restart.plist"
+PLIST_DST="/Library/LaunchDaemons/com.nanoclaw.weekly-restart.plist"
 
 cp "$PLIST_SRC" "$PLIST_DST"
 chown root:wheel "$PLIST_DST"

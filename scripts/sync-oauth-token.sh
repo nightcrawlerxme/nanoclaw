@@ -122,7 +122,16 @@ if [ "$ACCESS_TOKEN" = "$CURRENT_TOKEN" ]; then
   exit 0
 fi
 
-sed -i '' "s|CLAUDE_CODE_OAUTH_TOKEN=.*|CLAUDE_CODE_OAUTH_TOKEN=$ACCESS_TOKEN|" "$ENV_FILE"
+ENV_FILE="$ENV_FILE" ACCESS_TOKEN="$ACCESS_TOKEN" python3 -c "
+import os, re
+env_file = os.environ['ENV_FILE']
+token    = os.environ['ACCESS_TOKEN']
+with open(env_file, 'r') as f:
+    content = f.read()
+content = re.sub(r'^CLAUDE_CODE_OAUTH_TOKEN=.*', 'CLAUDE_CODE_OAUTH_TOKEN=' + token, content, flags=re.MULTILINE)
+with open(env_file, 'w') as f:
+    f.write(content)
+"
 echo "$(date): .env updated, restarting NanoClaw"
 
 launchctl kickstart -k "gui/$(id -u)/com.nanoclaw" 2>/dev/null || true

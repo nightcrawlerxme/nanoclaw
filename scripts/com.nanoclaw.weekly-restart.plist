@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>com.gabrielratner.weekly-restart</string>
+  <string>com.nanoclaw.weekly-restart</string>
   <key>ProgramArguments</key>
   <array>
     <string>/sbin/shutdown</string>
