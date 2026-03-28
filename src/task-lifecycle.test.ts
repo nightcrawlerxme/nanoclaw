@@ -1,6 +1,11 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 
-import { _initTestDatabase, createTask, getDb, updateTaskAfterRun } from './db.js';
+import {
+  _initTestDatabase,
+  createTask,
+  getDb,
+  updateTaskAfterRun,
+} from './db.js';
 import {
   advanceTaskLifecycle,
   fossilizeTask,
@@ -12,7 +17,11 @@ import {
 } from './task-lifecycle.js';
 import { ScheduledTask } from './types.js';
 
-function makeTask(overrides: Partial<ScheduledTask & { lifecycle_state: TaskLifecycleState }> = {}): ScheduledTask {
+function makeTask(
+  overrides: Partial<
+    ScheduledTask & { lifecycle_state: TaskLifecycleState }
+  > = {},
+): ScheduledTask {
   return {
     id: `test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     group_folder: 'test-group',
@@ -66,7 +75,11 @@ describe('task lifecycle', () => {
     createTask(task);
 
     // updateTaskAfterRun sets last_run to now
-    updateTaskAfterRun(task.id, new Date(Date.now() + 3600000).toISOString(), 'ok');
+    updateTaskAfterRun(
+      task.id,
+      new Date(Date.now() + 3600000).toISOString(),
+      'ok',
+    );
 
     const result = advanceTaskLifecycle(task.id);
 
@@ -85,7 +98,9 @@ describe('task lifecycle', () => {
 
     // Manually set last_run to 8 days ago and lifecycle_state to 'active'
     getDb()
-      .prepare("UPDATE scheduled_tasks SET last_run = ?, lifecycle_state = 'active' WHERE id = ?")
+      .prepare(
+        "UPDATE scheduled_tasks SET last_run = ?, lifecycle_state = 'active' WHERE id = ?",
+      )
       .run(eightDaysAgo.toISOString(), task.id);
 
     const now = new Date(eightDaysAgo.getTime() + 8 * 24 * 60 * 60 * 1000);
@@ -100,7 +115,9 @@ describe('task lifecycle', () => {
     createTask(task);
 
     getDb()
-      .prepare("UPDATE scheduled_tasks SET last_run = ?, lifecycle_state = 'stalled' WHERE id = ?")
+      .prepare(
+        "UPDATE scheduled_tasks SET last_run = ?, lifecycle_state = 'stalled' WHERE id = ?",
+      )
       .run(fifteenDaysAgo.toISOString(), task.id);
 
     const now = new Date(fifteenDaysAgo.getTime() + 15 * 24 * 60 * 60 * 1000);
@@ -115,7 +132,9 @@ describe('task lifecycle', () => {
     createTask(task);
 
     getDb()
-      .prepare("UPDATE scheduled_tasks SET last_run = ?, lifecycle_state = 'dying' WHERE id = ?")
+      .prepare(
+        "UPDATE scheduled_tasks SET last_run = ?, lifecycle_state = 'dying' WHERE id = ?",
+      )
       .run(twentyTwoDaysAgo.toISOString(), task.id);
 
     const now = new Date(twentyTwoDaysAgo.getTime() + 22 * 24 * 60 * 60 * 1000);
@@ -147,7 +166,9 @@ describe('task lifecycle', () => {
 
     // Set a last_result
     getDb()
-      .prepare("UPDATE scheduled_tasks SET last_result = ?, last_run = ? WHERE id = ?")
+      .prepare(
+        'UPDATE scheduled_tasks SET last_result = ?, last_run = ? WHERE id = ?',
+      )
       .run('some result text', new Date().toISOString(), task.id);
 
     fossilizeTask(task.id);
@@ -155,8 +176,12 @@ describe('task lifecycle', () => {
     const fossil = getTaskFossil(task.id);
     expect(fossil).toBeDefined();
     expect(fossil?.context_snapshot).not.toBeNull();
-    expect((fossil?.context_snapshot as Record<string, unknown>)?.last_result).toBe('some result text');
-    expect(typeof (fossil?.context_snapshot as Record<string, unknown>)?.run_count).toBe('number');
+    expect(
+      (fossil?.context_snapshot as Record<string, unknown>)?.last_result,
+    ).toBe('some result text');
+    expect(
+      typeof (fossil?.context_snapshot as Record<string, unknown>)?.run_count,
+    ).toBe('number');
   });
 
   it('getTaskFossils filters by group_folder', () => {
@@ -174,11 +199,35 @@ describe('task lifecycle', () => {
 
     const alphaFossils = getTaskFossils('group-alpha');
     expect(alphaFossils).toHaveLength(2);
-    expect(alphaFossils.every((f) => f.group_folder === 'group-alpha')).toBe(true);
+    expect(alphaFossils.every((f) => f.group_folder === 'group-alpha')).toBe(
+      true,
+    );
 
     const betaFossils = getTaskFossils('group-beta');
     expect(betaFossils).toHaveLength(1);
     expect(betaFossils[0].group_folder).toBe('group-beta');
+  });
+
+  it('advanceTaskLifecycle recovers stalled→active when last_run is fresh', () => {
+    const task = makeTask();
+    createTask(task);
+
+    // Task was stalled (last_run > 7 days ago), but then ran again recently
+    const recentRun = new Date(Date.now() - 60_000); // 1 minute ago
+    getDb()
+      .prepare(
+        "UPDATE scheduled_tasks SET last_run = ?, lifecycle_state = 'stalled' WHERE id = ?",
+      )
+      .run(recentRun.toISOString(), task.id);
+
+    const result = advanceTaskLifecycle(task.id);
+
+    expect(result).toBe('active');
+
+    const row = getDb()
+      .prepare('SELECT lifecycle_state FROM scheduled_tasks WHERE id = ?')
+      .get(task.id) as { lifecycle_state: string };
+    expect(row.lifecycle_state).toBe('active');
   });
 
   it("advanceTaskLifecycle returns null for status='paused'", () => {
@@ -187,8 +236,11 @@ describe('task lifecycle', () => {
 
     // Set a last_run so it would otherwise transition
     getDb()
-      .prepare("UPDATE scheduled_tasks SET last_run = ? WHERE id = ?")
-      .run(new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(), task.id);
+      .prepare('UPDATE scheduled_tasks SET last_run = ? WHERE id = ?')
+      .run(
+        new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
+        task.id,
+      );
 
     const result = advanceTaskLifecycle(task.id);
     expect(result).toBeNull();
