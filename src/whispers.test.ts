@@ -64,7 +64,14 @@ describe('whispers', () => {
         `INSERT INTO whispers (source_group_folder, signal, strength, emitted_at, expires_at, decay_rate)
          VALUES (?, ?, ?, ?, ?, ?)`,
       )
-      .run('group-a', 'decaying signal', 1.0, tenHoursAgo.toISOString(), expiresAt, 0.05);
+      .run(
+        'group-a',
+        'decaying signal',
+        1.0,
+        tenHoursAgo.toISOString(),
+        expiresAt,
+        0.05,
+      );
 
     decayWhispers(new Date());
 
@@ -88,7 +95,14 @@ describe('whispers', () => {
         `INSERT INTO whispers (source_group_folder, signal, strength, emitted_at, expires_at, decay_rate)
          VALUES (?, ?, ?, ?, ?, ?)`,
       )
-      .run('group-a', 'dying signal', 1.0, tenHoursAgo.toISOString(), expiresAt, 0.2);
+      .run(
+        'group-a',
+        'dying signal',
+        1.0,
+        tenHoursAgo.toISOString(),
+        expiresAt,
+        0.2,
+      );
 
     decayWhispers(new Date());
 
@@ -109,7 +123,14 @@ describe('whispers', () => {
         `INSERT INTO whispers (source_group_folder, signal, strength, emitted_at, expires_at, decay_rate)
          VALUES (?, ?, ?, ?, ?, ?)`,
       )
-      .run('group-a', 'expired signal', 0.99, twoHoursAgo.toISOString(), oneHourAgo.toISOString(), 0.001);
+      .run(
+        'group-a',
+        'expired signal',
+        0.99,
+        twoHoursAgo.toISOString(),
+        oneHourAgo.toISOString(),
+        0.001,
+      );
 
     decayWhispers(new Date());
 
@@ -135,6 +156,7 @@ describe('whispers', () => {
         emitted_at: new Date().toISOString(),
         expires_at: new Date(Date.now() + 3600000).toISOString(),
         decay_rate: 0.1,
+        last_decay_at: null,
       },
     ];
 
@@ -188,7 +210,9 @@ describe('whispers', () => {
 
     // No assertion on exact call count here — we verify no duplicate behavior
     // by confirming the whisper is handled without errors.
-    const rows = getDb().prepare('SELECT COUNT(*) as cnt FROM whispers').get() as { cnt: number };
+    const rows = getDb()
+      .prepare('SELECT COUNT(*) as cnt FROM whispers')
+      .get() as { cnt: number };
     // Whisper should still exist since it was just created with default 72hr TTL
     // and decay_rate 0.1 over 1 minute is negligible (0.1 * (1/60) ≈ 0.0017)
     expect(rows.cnt).toBe(1);

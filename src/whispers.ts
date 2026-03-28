@@ -9,6 +9,7 @@ export interface Whisper {
   emitted_at: string;
   expires_at: string;
   decay_rate: number;
+  last_decay_at: string | null;
 }
 
 let whisperDecayLoopRunning = false;
@@ -24,16 +25,28 @@ export function emitWhisper(
 
   const now = new Date();
   const emittedAt = now.toISOString();
-  const expiresAt = new Date(now.getTime() + ttlHours * 3600 * 1000).toISOString();
+  const expiresAt = new Date(
+    now.getTime() + ttlHours * 3600 * 1000,
+  ).toISOString();
 
   getDb()
     .prepare(
       `INSERT INTO whispers (source_group_folder, signal, strength, emitted_at, expires_at, decay_rate)
        VALUES (?, ?, ?, ?, ?, ?)`,
     )
-    .run(sourceGroupFolder, signal, initialStrength, emittedAt, expiresAt, decayRate);
+    .run(
+      sourceGroupFolder,
+      signal,
+      initialStrength,
+      emittedAt,
+      expiresAt,
+      decayRate,
+    );
 
-  logger.debug({ sourceGroupFolder, signal, ttlHours, decayRate, initialStrength }, 'Whisper emitted');
+  logger.debug(
+    { sourceGroupFolder, signal, ttlHours, decayRate, initialStrength },
+    'Whisper emitted',
+  );
 }
 
 export function decayWhispers(now?: Date): void {
@@ -41,22 +54,27 @@ export function decayWhispers(now?: Date): void {
   const nowDate = now ?? new Date();
   const nowIso = nowDate.toISOString();
 
-  // Update strength: reduce by decay_rate * hoursElapsed since emission
+  // Use incremental decay since last_decay_at (falls back to emitted_at on first tick)
+  // to avoid compounding: each tick only subtracts the delta since the last decay.
   db.prepare(
     `UPDATE whispers
-     SET strength = MAX(0, strength - (decay_rate * ((unixepoch(?) - unixepoch(emitted_at)) / 3600.0)))
+     SET strength = MAX(0, strength - (decay_rate * ((unixepoch(?) - unixepoch(COALESCE(last_decay_at, emitted_at))) / 3600.0))),
+         last_decay_at = ?
      WHERE expires_at > ?`,
-  ).run(nowIso, nowIso);
+  ).run(nowIso, nowIso, nowIso);
 
   // Delete exhausted or expired whispers
-  db.prepare(
-    `DELETE FROM whispers WHERE strength <= 0 OR expires_at <= ?`,
-  ).run(nowIso);
+  db.prepare(`DELETE FROM whispers WHERE strength <= 0 OR expires_at <= ?`).run(
+    nowIso,
+  );
 
   logger.debug({ now: nowIso }, 'Whispers decayed');
 }
 
-export function getActiveWhispers(options?: { minStrength?: number; limit?: number }): Whisper[] {
+export function getActiveWhispers(options?: {
+  minStrength?: number;
+  limit?: number;
+}): Whisper[] {
   const db = getDb();
   const minStrength = options?.minStrength ?? 0;
   const nowIso = new Date().toISOString();
@@ -72,7 +90,10 @@ export function getActiveWhispers(options?: { minStrength?: number; limit?: numb
   return db.prepare(sql).all(...params) as Whisper[];
 }
 
-export function buildWhisperContextPrefix(whispers: Whisper[], maxChars?: number): string {
+export function buildWhisperContextPrefix(
+  whispers: Whisper[],
+  maxChars?: number,
+): string {
   if (whispers.length === 0) return '';
 
   const lines = whispers
@@ -88,7 +109,10 @@ export function buildWhisperContextPrefix(whispers: Whisper[], maxChars?: number
   return result;
 }
 
-export function injectWhisperContext(groupFolder: string, existingPrompt: string): string {
+export function injectWhisperContext(
+  groupFolder: string,
+  existingPrompt: string,
+): string {
   const whispers = getActiveWhispers({ minStrength: 0.1, limit: 10 });
 
   if (whispers.length === 0) {
@@ -99,7 +123,9 @@ export function injectWhisperContext(groupFolder: string, existingPrompt: string
   return `${prefix}\n\n${existingPrompt}`;
 }
 
-export function startWhisperDecayLoop(options?: { pollIntervalMs?: number }): void {
+export function startWhisperDecayLoop(options?: {
+  pollIntervalMs?: number;
+}): void {
   if (whisperDecayLoopRunning) {
     logger.debug('Whisper decay loop already running, skipping');
     return;

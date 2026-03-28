@@ -320,12 +320,20 @@ function createSchema(database: Database.Database): void {
       sql: `ALTER TABLE scheduled_tasks ADD COLUMN lifecycle_state TEXT DEFAULT 'born';`,
     },
     {
-      id: '012_shadow_mode_columns',
-      sql: `
-        ALTER TABLE registered_groups ADD COLUMN shadow_mode INTEGER DEFAULT 0;
-        ALTER TABLE registered_groups ADD COLUMN shadow_activation_threshold INTEGER DEFAULT 10;
-        ALTER TABLE registered_groups ADD COLUMN shadow_message_count INTEGER DEFAULT 0;
-      `,
+      id: '012_whispers_last_decay_at',
+      sql: `ALTER TABLE whispers ADD COLUMN last_decay_at TEXT;`,
+    },
+    {
+      id: '012a_shadow_mode',
+      sql: `ALTER TABLE registered_groups ADD COLUMN shadow_mode INTEGER DEFAULT 0;`,
+    },
+    {
+      id: '012b_shadow_activation_threshold',
+      sql: `ALTER TABLE registered_groups ADD COLUMN shadow_activation_threshold INTEGER DEFAULT 10;`,
+    },
+    {
+      id: '012c_shadow_message_count',
+      sql: `ALTER TABLE registered_groups ADD COLUMN shadow_message_count INTEGER DEFAULT 0;`,
     },
   ]);
 }
@@ -336,9 +344,9 @@ function runMigrations(
 ): void {
   const applied = new Set(
     (
-      database
-        .prepare('SELECT id FROM schema_migrations')
-        .all() as { id: string }[]
+      database.prepare('SELECT id FROM schema_migrations').all() as {
+        id: string;
+      }[]
     ).map((r) => r.id),
   );
   const insert = database.prepare(
@@ -816,8 +824,18 @@ export function setRegisteredGroup(jid: string, group: RegisteredGroup): void {
     throw new Error(`Invalid group folder "${group.folder}" for JID ${jid}`);
   }
   db.prepare(
-    `INSERT OR REPLACE INTO registered_groups (jid, name, folder, trigger_pattern, added_at, container_config, requires_trigger, is_main, shadow_mode, shadow_activation_threshold)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO registered_groups (jid, name, folder, trigger_pattern, added_at, container_config, requires_trigger, is_main, shadow_mode, shadow_activation_threshold, shadow_message_count)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+     ON CONFLICT(jid) DO UPDATE SET
+       name = excluded.name,
+       folder = excluded.folder,
+       trigger_pattern = excluded.trigger_pattern,
+       added_at = excluded.added_at,
+       container_config = excluded.container_config,
+       requires_trigger = excluded.requires_trigger,
+       is_main = excluded.is_main,
+       shadow_mode = excluded.shadow_mode,
+       shadow_activation_threshold = excluded.shadow_activation_threshold`,
   ).run(
     jid,
     group.name,
@@ -866,8 +884,7 @@ export function getAllRegisteredGroups(): Record<string, RegisteredGroup> {
         row.requires_trigger === null ? undefined : row.requires_trigger === 1,
       isMain: row.is_main === 1 ? true : undefined,
       shadowMode: row.shadow_mode === 1 ? true : undefined,
-      shadowActivationThreshold:
-        row.shadow_activation_threshold ?? undefined,
+      shadowActivationThreshold: row.shadow_activation_threshold ?? undefined,
     };
   }
   return result;
