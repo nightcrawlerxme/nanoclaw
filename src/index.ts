@@ -49,6 +49,7 @@ import {
 import { GroupQueue } from './group-queue.js';
 import { resolveGroupFolderPath } from './group-folder.js';
 import { startIpcWatcher } from './ipc.js';
+import { registerPaperclipRoute } from './plugins/paperclip.js';
 import { findChannel, formatMessages, formatOutbound } from './router.js';
 import {
   restoreRemoteControl,
@@ -62,6 +63,19 @@ import {
   shouldDropMessage,
 } from './sender-allowlist.js';
 import { startSchedulerLoop } from './task-scheduler.js';
+import { startDebtMonitorLoop } from './temporal-debt.js';
+import { startLifecycleMonitorLoop } from './task-lifecycle.js';
+import { startWhisperDecayLoop, injectWhisperContext } from './whispers.js';
+import { scheduleCircadianTask } from './circadian.js';
+import { scheduleEmergenceTask } from './emergence.js';
+import { scheduleUncertaintyReport } from './uncertainty.js';
+import { scheduleArchaeologyTask } from './archaeology.js';
+import { ensureNarrativeFile } from './narrative.js';
+import {
+  isGroupInShadowMode,
+  storeShadowResponse,
+  incrementShadowMessageCount,
+} from './shadow-mode.js';
 import { Channel, NewMessage, RegisteredGroup } from './types.js';
 import { logger } from './logger.js';
 
@@ -121,6 +135,13 @@ function registerGroup(jid: string, group: RegisteredGroup): void {
   // Create group folder
   fs.mkdirSync(path.join(groupDir, 'logs'), { recursive: true });
 
+  // Ensure narrative file exists for new groups
+  try {
+    ensureNarrativeFile(group.folder);
+  } catch {
+    /* non-critical */
+  }
+
   logger.info(
     { jid, name: group.name, folder: group.folder },
     'Group registered',
@@ -167,6 +188,9 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
   }
 
   const isMainGroup = group.isMain === true;
+  // Snapshot shadow mode once so mid-stream activation can't split a response
+  // between stored (shadow) and sent (live) chunks.
+  const isShadowMode = isGroupInShadowMode(chatJid);
 
   const sinceTimestamp = lastAgentTimestamp[chatJid] || '';
   const missedMessages = getMessagesSince(
@@ -188,7 +212,8 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
     if (!hasTrigger) return true;
   }
 
-  const prompt = formatMessages(missedMessages, TIMEZONE);
+  const rawPrompt = formatMessages(missedMessages, TIMEZONE);
+  const prompt = injectWhisperContext(group.folder, rawPrompt);
 
   // Advance cursor so the piping path in startMessageLoop won't re-fetch
   // these messages. Save the old cursor so we can roll back on error.
@@ -283,8 +308,15 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
           `Agent output: ${raw.slice(0, 200)}`,
         );
         if (text) {
-          await channel.sendMessage(chatJid, text);
-          outputSentToUser = true;
+          // Use the pre-snapshotted shadow flag so mid-stream activation
+          // cannot split a single response between stored and live chunks.
+          if (isShadowMode) {
+            storeShadowResponse(group.folder, chatJid, prompt, text);
+            outputSentToUser = true; // Treat as sent to avoid cursor rollback
+          } else {
+            await channel.sendMessage(chatJid, text);
+            outputSentToUser = true;
+          }
         }
         // Only reset idle timer on actual results, not session-update markers (result: null)
         resetIdleTimer();
@@ -303,6 +335,12 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
 
   await channel.setTyping?.(chatJid, false);
   if (idleTimer) clearTimeout(idleTimer);
+
+  // Increment shadow count once per message turn (not per chunk) so
+  // the threshold check fires at the correct granularity.
+  if (isShadowMode) {
+    incrementShadowMessageCount(chatJid);
+  }
 
   if (output === 'error' || hadError) {
     // If we already sent output to the user, don't roll back the cursor —
@@ -701,6 +739,19 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  // Wire up sibling channels for cross-channel forwarding (e.g., webhook → telegram)
+  for (const ch of channels) {
+    if (
+      'setSiblingChannels' in ch &&
+      typeof ch.setSiblingChannels === 'function'
+    ) {
+      (ch as any).setSiblingChannels(channels);
+    }
+  }
+
+  // Register webhook plugins (must be after channels connect)
+  registerPaperclipRoute();
+
   // Start subsystems (independently of connection handler)
   startSchedulerLoop({
     registeredGroups: () => registeredGroups,
@@ -791,6 +842,41 @@ async function main(): Promise<void> {
       );
     queue.enqueueMessageCheck(chatJid);
   };
+
+  // Start intelligence feature background loops
+  startDebtMonitorLoop(async (jid, text) => {
+    const channel = findChannel(channels, jid);
+    if (channel) await channel.sendMessage(jid, text);
+  });
+  startLifecycleMonitorLoop();
+  startWhisperDecayLoop();
+
+  // Schedule intelligence feature recurring tasks
+  const mainGroup = Object.entries(registeredGroups).find(([, g]) => g.isMain);
+  const mainGroupJid = mainGroup?.[0] ?? '';
+  const sendMessageFn = async (jid: string, rawText: string) => {
+    const channel = findChannel(channels, jid);
+    if (!channel) return;
+    const text = formatOutbound(rawText);
+    if (text) await channel.sendMessage(jid, text);
+  };
+
+  scheduleCircadianTask(
+    {
+      cronExpr: '0 3 * * *',
+      timezone: TIMEZONE,
+      digestTargetJid: mainGroupJid || undefined,
+    },
+    queue,
+    sendMessageFn,
+  );
+
+  if (mainGroupJid) {
+    scheduleEmergenceTask(mainGroupJid, queue, sendMessageFn);
+    scheduleUncertaintyReport(mainGroupJid, sendMessageFn);
+  }
+
+  scheduleArchaeologyTask(queue, () => registeredGroups);
 
   recoverPendingMessages();
   startMessageLoop().catch((err) => {

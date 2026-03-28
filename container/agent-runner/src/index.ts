@@ -407,7 +407,9 @@ async function runQuery(
         'TeamCreate', 'TeamDelete', 'SendMessage',
         'TodoWrite', 'ToolSearch', 'Skill',
         'NotebookEdit',
-        'mcp__nanoclaw__*'
+        'mcp__nanoclaw__*',
+        'mcp__gws__*',
+        'mcp__outlook__*',
       ],
       env: sdkEnv,
       permissionMode: 'bypassPermissions',
@@ -423,6 +425,33 @@ async function runQuery(
             NANOCLAW_IS_MAIN: containerInput.isMain ? '1' : '0',
           },
         },
+        // Only register gws when credentials are mounted
+        ...(fs.existsSync('/home/node/.config/gws')
+          ? {
+              gws: {
+                command: 'node',
+                args: [path.join(path.dirname(mcpServerPath), 'gws-mcp-stdio.js')],
+                env: {
+                  NANOCLAW_CHAT_JID: containerInput.chatJid,
+                  NANOCLAW_GROUP_FOLDER: containerInput.groupFolder,
+                },
+              },
+            }
+          : {}),
+        // Only register outlook when credentials are injected
+        ...(process.env.MS_CLIENT_ID
+          ? {
+              outlook: {
+                command: 'npx',
+                args: ['-y', 'outlook-mcp'],
+                env: {
+                  MS_CLIENT_ID: process.env.MS_CLIENT_ID,
+                  MS_CLIENT_SECRET: process.env.MS_CLIENT_SECRET || '',
+                  HOME: '/home/node',
+                },
+              },
+            }
+          : {}),
       },
       hooks: {
         PreCompact: [{ hooks: [createPreCompactHook(containerInput.assistantName)] }],

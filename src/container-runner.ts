@@ -4,6 +4,7 @@
  */
 import { ChildProcess, exec, spawn } from 'child_process';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 
 import {
@@ -163,6 +164,27 @@ function buildVolumeMounts(
     readonly: false,
   });
 
+  // Outlook credentials directory (for Outlook MCP inside the container)
+  const homeDir = os.homedir();
+  const outlookDir = path.join(homeDir, '.outlook-mcp');
+  if (fs.existsSync(outlookDir)) {
+    mounts.push({
+      hostPath: outlookDir,
+      containerPath: '/home/node/.outlook-mcp',
+      readonly: true, // Credentials are read-only; tokens stored separately
+    });
+  }
+
+  // Outlook MCP token file (needs read-write for token refresh)
+  const outlookTokenFile = path.join(homeDir, '.outlook-mcp-tokens.json');
+  if (fs.existsSync(outlookTokenFile)) {
+    mounts.push({
+      hostPath: outlookTokenFile,
+      containerPath: '/home/node/.outlook-mcp-tokens.json',
+      readonly: false, // MCP needs to refresh OAuth tokens
+    });
+  }
+
   // Per-group IPC namespace: each group gets its own IPC directory
   // This prevents cross-group privilege escalation via IPC
   const groupIpcDir = resolveGroupIpcPath(group.folder);
@@ -174,6 +196,17 @@ function buildVolumeMounts(
     containerPath: '/workspace/ipc',
     readonly: false,
   });
+
+  // Google Workspace CLI credentials (read-only)
+  // gws uses ~/.config/gws/ for OAuth tokens and client config
+  const gwsConfigDir = path.join(homeDir, '.config', 'gws');
+  if (fs.existsSync(gwsConfigDir)) {
+    mounts.push({
+      hostPath: gwsConfigDir,
+      containerPath: '/home/node/.config/gws',
+      readonly: true,
+    });
+  }
 
   // Copy agent-runner source into a per-group writable location so agents
   // can customize it (add tools, change behavior) without affecting other

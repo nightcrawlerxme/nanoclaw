@@ -83,14 +83,37 @@ Then run `/setup`. Claude Code handles everything: dependencies, authentication,
 
 ## What It Supports
 
-- **Multi-channel messaging** - Talk to your assistant from WhatsApp, Telegram, Discord, Slack, or Gmail. Add channels with skills like `/add-whatsapp` or `/add-telegram`. Run one or many at the same time.
+- **Multi-channel messaging** - Talk to your assistant from WhatsApp, Telegram, Discord, Slack, Gmail, or Outlook. Add channels with skills like `/add-whatsapp` or `/add-telegram`. Run one or many at the same time.
 - **Isolated group context** - Each group has its own `CLAUDE.md` memory, isolated filesystem, and runs in its own container sandbox with only that filesystem mounted to it.
 - **Main channel** - Your private channel (self-chat) for admin control; every group is completely isolated
 - **Scheduled tasks** - Recurring jobs that run Claude and can message you back
 - **Web access** - Search and fetch content from the Web
 - **Container isolation** - Agents are sandboxed in [Docker Sandboxes](https://nanoclaw.dev/blog/nanoclaw-docker-sandboxes) (micro VM isolation), Apple Container (macOS), or Docker (macOS/Linux)
 - **Agent Swarms** - Spin up teams of specialized agents that collaborate on complex tasks
-- **Optional integrations** - Add Gmail (`/add-gmail`) and more via skills
+- **Webhook channel** - Inbound HTTP webhook (`POST /webhook`) so CI/CD pipelines, monitoring tools, and project management apps can trigger agents directly
+- **Voice transcription** - WhatsApp voice messages are automatically transcribed via OpenAI Whisper before reaching the agent
+- **Optional integrations** - Google Workspace (`/add-google-workspace`), Outlook (`/add-outlook`), Gmail (`/add-gmail`), and more via skills
+
+## Autonomous Intelligence Features
+
+NanoClaw includes a set of optional features that give it emergent, self-regulating behavior — memory that degrades and reforms, signals that spread across groups, and awareness that compounds over time.
+
+| Feature | Description |
+|---------|-------------|
+| **Biological Task Lifecycle** | Tasks age through states: `born → active → stalled → dying → dead → fossilized`. Dead tasks are archived with full context snapshots in `task_fossils`. |
+| **Whisper Network** | Groups emit time-decaying signals (whispers) that are injected as context into other groups' prompts. Signals decay linearly and expire automatically. |
+| **Temporal Debt Engine** | Unresolved obligations are tracked with scores that compound with escalation count (capped at 100). High-debt items trigger alerts to the group. |
+| **Circadian Consolidation** | A nightly cron job synthesizes all group `CLAUDE.md` files, prunes stale memory blocks, and generates a digest — all via a dedicated off-peak container. |
+| **Memory Ecology** | `CLAUDE.md` memory blocks carry fitness scores (frequency × recency − contradictions). Low-fitness memories are pruned by the circadian job. |
+| **Narrative Continuity** | Groups maintain a `NARRATIVE.md` event journal (`task_complete`, `milestone`, `failure`, `insight`) that the consolidation job folds into a running narrative. |
+| **Emergence Detection** | A weekly job reads all `NARRATIVE.md` and `CLAUDE.md` files across groups and surfaces cross-group patterns to the main group. |
+| **Semantic Gravity Map** | A concept co-occurrence graph (`groups/global/semantic-graph.json`) grows as agents work. Top concepts are injected into consolidation prompts. |
+| **Shadow Mode** | New groups observe silently — responses are stored but not sent — until a configurable message threshold. Auto-activates with no manual intervention. |
+| **Metacognitive Uncertainty** | Agents log confidence scores and uncertainty sources per response. A weekly report aggregates patterns and surfaces recurring blind spots. |
+| **Container Archaeology** | Parses container run logs to compute p50/p95 latency, slow task counts, and silent failures. Results are written to `groups/{folder}/PERFORMANCE.md`. |
+| **Adversarial Twin** | An optional skeptic container reviews agent responses and feeds rebuttals back for a second-pass refinement. Enabled per-group via `adversarial-twin.json`. |
+
+All features use the existing SQLite DB (automatic migrations), the IPC file-watching system, and the scheduler loop — no new infrastructure required.
 
 ## Usage
 
@@ -130,6 +153,39 @@ If you want to add Telegram support, don't create a PR that adds Telegram to the
 
 Users then run `/add-telegram` on their fork and get clean code that does exactly what they need, not a bloated system trying to support every use case.
 
+### Available Skills (via Marketplace)
+
+Skills auto-load from the [nanoclaw-skills marketplace](https://github.com/qwibitai/nanoclaw-skills) at startup — no manual install needed.
+
+**Channels**
+- `/add-whatsapp` - WhatsApp (QR or pairing code)
+- `/add-telegram` - Telegram bot
+- `/add-discord` - Discord bot
+- `/add-slack` - Slack Socket Mode
+- `/add-gmail` - Gmail as channel or tool
+- `/add-outlook` - Microsoft Outlook/Teams/Calendar (MSAL OAuth, 75 MCP tools)
+- `/add-webhook` - Generic inbound HTTP webhook
+
+**Google Workspace**
+- `/add-google-workspace` - Unified Google CLI MCP (Gmail, Drive, Sheets, Docs, Calendar)
+
+**Enhancements**
+- `/add-voice-transcription` - OpenAI Whisper transcription for voice messages
+- `/add-image-vision` - WhatsApp image attachment support
+- `/add-pdf-reader` - PDF text extraction
+- `/add-reactions` - WhatsApp emoji reactions
+- `/add-ollama-tool` - Local LLM via Ollama (offload cheaper tasks)
+- `/add-compact` - Manual `/compact` session command
+- `/add-telegram-swarm` - Multi-bot agent teams on Telegram
+- `/add-parallel` - Parallel agent execution
+
+**Operations**
+- `/setup` - First-time installation and authentication
+- `/update-nanoclaw` - Merge upstream changes into your fork
+- `/update-skills` - Check for and apply skill branch updates
+- `/debug` - Troubleshoot container issues and logs
+- `/customize` - Guided changes: channels, integrations, behavior
+
 ### RFS (Request for Skills)
 
 Skills we'd like to see:
@@ -160,13 +216,31 @@ For the full architecture details, see [docs/SPEC.md](docs/SPEC.md).
 Key files:
 - `src/index.ts` - Orchestrator: state, message loop, agent invocation
 - `src/channels/registry.ts` - Channel registry (self-registration at startup)
+- `src/channels/outlook.ts` - Outlook channel (MSAL OAuth, email/calendar/Teams polling)
+- `src/channels/webhook.ts` - Generic inbound webhook channel with plugin route system
+- `src/plugins/paperclip.ts` - Paperclip project management webhook plugin
+- `src/transcription.ts` - Voice message transcription via OpenAI Whisper
 - `src/ipc.ts` - IPC watcher and task processing
 - `src/router.ts` - Message formatting and outbound routing
 - `src/group-queue.ts` - Per-group queue with global concurrency limit
-- `src/container-runner.ts` - Spawns streaming agent containers
+- `src/container-runner.ts` - Spawns streaming agent containers (mounts Outlook/GWS credentials)
 - `src/task-scheduler.ts` - Runs scheduled tasks
 - `src/db.ts` - SQLite operations (messages, groups, sessions, state)
+- `container/agent-runner/src/gws-mcp-stdio.ts` - Google Workspace CLI MCP (unified Gmail/Drive/Calendar/Sheets)
 - `groups/*/CLAUDE.md` - Per-group memory
+- `src/task-lifecycle.ts` - Biological task lifecycle state machine
+- `src/whispers.ts` - Cross-group signal propagation and decay
+- `src/temporal-debt.ts` - Obligation tracking with escalating scores
+- `src/circadian.ts` - Nightly consolidation scheduler
+- `src/memory-ecology.ts` - Fitness-scored memory pruning
+- `src/narrative.ts` - Event journal and NARRATIVE.md management
+- `src/emergence.ts` - Weekly cross-group pattern detection
+- `src/semantic-graph.ts` - Concept co-occurrence graph
+- `src/shadow-mode.ts` - Silent-observation onboarding for new groups
+- `src/uncertainty.ts` - Confidence logging and uncertainty reports
+- `src/archaeology.ts` - Container log analysis and PERFORMANCE.md
+- `src/adversarial-twin.ts` - Skeptic second-pass refinement
+- `src/consolidation-runner.ts` - Off-peak consolidation container executor
 
 ## FAQ
 
