@@ -1,9 +1,17 @@
 #!/bin/bash
 # Wait for Docker to be ready before starting NanoClaw
 
-DOCKER_SOCK="${DOCKER_HOST:-$HOME/.docker/run/docker.sock}"
-# Strip leading unix:// prefix if present (e.g. DOCKER_HOST=unix:///var/run/docker.sock)
-DOCKER_SOCK="${DOCKER_SOCK#unix://}"
+DOCKER_SOCK_CHECK=true
+if [ -n "$DOCKER_HOST" ]; then
+    case "$DOCKER_HOST" in
+        unix://*) DOCKER_SOCK="${DOCKER_HOST#unix://}" ;;
+        tcp://*|http://*) DOCKER_SOCK_CHECK=false ;;
+        /*) DOCKER_SOCK="$DOCKER_HOST" ;;
+        *) DOCKER_SOCK_CHECK=false ;;
+    esac
+else
+    DOCKER_SOCK="$HOME/.docker/run/docker.sock"
+fi
 MAX_WAIT=120
 ELAPSED=0
 
@@ -17,7 +25,7 @@ if ! "$DOCKER_CMD" info &>/dev/null; then
 fi
 
 # Wait for Docker socket to be available
-while [ ! -S "$DOCKER_SOCK" ] || ! "$DOCKER_CMD" info &>/dev/null; do
+while ( $DOCKER_SOCK_CHECK && [ ! -S "$DOCKER_SOCK" ] ) || ! "$DOCKER_CMD" info &>/dev/null; do
     if [ $ELAPSED -ge $MAX_WAIT ]; then
         echo "$(date): Timed out waiting for Docker" >&2
         exit 1
