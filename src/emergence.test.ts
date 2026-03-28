@@ -50,9 +50,7 @@ describe('emergence', () => {
     };
     expect(row).toBeDefined();
     expect(row.delivered).toBe(0);
-    expect(row.pattern_summary).toBe(
-      'Pattern: all groups focus on delivery',
-    );
+    expect(row.pattern_summary).toBe('Pattern: all groups focus on delivery');
     expect(JSON.parse(row.groups_analyzed)).toEqual([
       'team-alpha',
       'team-beta',

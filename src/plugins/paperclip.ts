@@ -15,20 +15,28 @@ const NOTIFY_EVENTS = new Set([
   'webhook.test',
 ]);
 
-function shouldNotify(eventType: string, eventData: Record<string, unknown>): boolean {
+function shouldNotify(
+  eventType: string,
+  eventData: Record<string, unknown>,
+): boolean {
   if (!NOTIFY_EVENTS.has(eventType)) return false;
 
   // agent.run.* and webhook.test always notify
-  if (eventType.startsWith('agent.') || eventType === 'webhook.test') return true;
+  if (eventType.startsWith('agent.') || eventType === 'webhook.test')
+    return true;
 
   // For issue/comment events: only notify if created by an agent, not a human.
-  const actor = eventData.actor || eventData.createdBy || eventData.source || '';
+  const actor =
+    eventData.actor || eventData.createdBy || eventData.source || '';
   const actorStr = typeof actor === 'string' ? actor : JSON.stringify(actor);
   const isAgent = /agent|bot|automation|api/i.test(actorStr);
 
   // If we can't determine the actor, notify (fail-open)
   if (!actorStr || actorStr === '{}') {
-    logger.debug({ eventType }, 'Paperclip: no actor field, notifying (fail-open)');
+    logger.debug(
+      { eventType },
+      'Paperclip: no actor field, notifying (fail-open)',
+    );
     return true;
   }
 

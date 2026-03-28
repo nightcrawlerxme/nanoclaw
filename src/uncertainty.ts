@@ -30,9 +30,7 @@ export function logUncertainty(
   entry: Omit<UncertaintyLog, 'id' | 'logged_at'>,
 ): void {
   if (entry.confidence < 0 || entry.confidence > 1) {
-    throw new Error(
-      `confidence must be in [0, 1], got ${entry.confidence}`,
-    );
+    throw new Error(`confidence must be in [0, 1], got ${entry.confidence}`);
   }
 
   const now = new Date().toISOString();
@@ -59,8 +57,7 @@ export function getUncertaintyLogs(
   groupFolder: string,
   options?: { since?: string; limit?: number },
 ): UncertaintyLog[] {
-  let sql =
-    'SELECT * FROM uncertainty_logs WHERE group_folder = ?';
+  let sql = 'SELECT * FROM uncertainty_logs WHERE group_folder = ?';
   const params: unknown[] = [groupFolder];
 
   if (options?.since) {
@@ -74,15 +71,15 @@ export function getUncertaintyLogs(
     sql += ` LIMIT ${options.limit}`;
   }
 
-  return getDb().prepare(sql).all(...params) as UncertaintyLog[];
+  return getDb()
+    .prepare(sql)
+    .all(...params) as UncertaintyLog[];
 }
 
 /**
  * Builds a human-readable uncertainty pattern report from a set of logs.
  */
-export function buildUncertaintyPatternReport(
-  logs: UncertaintyLog[],
-): string {
+export function buildUncertaintyPatternReport(logs: UncertaintyLog[]): string {
   if (logs.length === 0) {
     return 'No uncertainty data available for this period.';
   }

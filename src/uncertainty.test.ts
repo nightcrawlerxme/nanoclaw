@@ -208,9 +208,7 @@ describe('uncertainty', () => {
     scheduleUncertaintyReport('main@g.us', sendMessage);
 
     const rows = getDb()
-      .prepare(
-        "SELECT id FROM scheduled_tasks WHERE id = 'uncertainty-weekly'",
-      )
+      .prepare("SELECT id FROM scheduled_tasks WHERE id = 'uncertainty-weekly'")
       .all();
     expect(rows).toHaveLength(1);
   });

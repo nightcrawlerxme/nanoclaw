@@ -4,7 +4,11 @@ import path from 'path';
 import { GROUPS_DIR } from './config.js';
 import { getDb } from './db.js';
 
-export type NarrativeEventType = 'task_complete' | 'milestone' | 'failure' | 'insight';
+export type NarrativeEventType =
+  | 'task_complete'
+  | 'milestone'
+  | 'failure'
+  | 'insight';
 
 export interface NarrativeEvent {
   id: number;
@@ -28,7 +32,9 @@ export function recordNarrativeEvent(
   ).run(groupFolder, eventType, description, now);
 }
 
-export function getPendingNarrativeEvents(groupFolder: string): NarrativeEvent[] {
+export function getPendingNarrativeEvents(
+  groupFolder: string,
+): NarrativeEvent[] {
   const db = getDb();
   return db
     .prepare(

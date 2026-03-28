@@ -5,7 +5,13 @@ import { CronExpressionParser } from 'cron-parser';
 
 import { DATA_DIR, IPC_POLL_INTERVAL, TIMEZONE } from './config.js';
 import { AvailableGroup } from './container-runner.js';
-import { createTask, deleteTask, getDb, getTaskById, updateTask } from './db.js';
+import {
+  createTask,
+  deleteTask,
+  getDb,
+  getTaskById,
+  updateTask,
+} from './db.js';
 import { addDebt, resolveDebt } from './temporal-debt.js';
 import { recordNarrativeEvent, NarrativeEventType } from './narrative.js';
 import { activateShadowGroup } from './shadow-mode.js';
@@ -551,18 +557,28 @@ export async function processTaskIpc(
           .prepare('SELECT group_folder FROM temporal_debt WHERE id = ?')
           .get(data.debtId) as { group_folder: string } | undefined;
         if (!debtRow) {
-          logger.warn({ debtId: data.debtId, sourceGroup }, 'resolve_debt: debt not found');
+          logger.warn(
+            { debtId: data.debtId, sourceGroup },
+            'resolve_debt: debt not found',
+          );
           break;
         }
         if (!isMain && debtRow.group_folder !== sourceGroup) {
           logger.warn(
-            { debtId: data.debtId, sourceGroup, ownerGroup: debtRow.group_folder },
+            {
+              debtId: data.debtId,
+              sourceGroup,
+              ownerGroup: debtRow.group_folder,
+            },
             'resolve_debt: unauthorized — group can only resolve its own debt',
           );
           break;
         }
         resolveDebt(data.debtId);
-        logger.info({ debtId: data.debtId, sourceGroup }, 'Debt resolved via IPC');
+        logger.info(
+          { debtId: data.debtId, sourceGroup },
+          'Debt resolved via IPC',
+        );
       }
       break;
 

@@ -35,9 +35,7 @@ export function setShadowMode(jid: string, enabled: boolean): void {
  */
 export function getShadowMessageCount(jid: string): number {
   const row = getDb()
-    .prepare(
-      'SELECT shadow_message_count FROM registered_groups WHERE jid = ?',
-    )
+    .prepare('SELECT shadow_message_count FROM registered_groups WHERE jid = ?')
     .get(jid) as { shadow_message_count: number } | undefined;
   return row?.shadow_message_count ?? 0;
 }

@@ -24,8 +24,7 @@ function makeBlock(overrides: Partial<MemoryBlock> = {}): MemoryBlock {
     frequency: overrides.frequency ?? 3,
     tags: overrides.tags ?? ['test'],
     created_at: overrides.created_at ?? '2024-01-01T00:00:00.000Z',
-    last_accessed_at:
-      overrides.last_accessed_at ?? '2024-01-10T00:00:00.000Z',
+    last_accessed_at: overrides.last_accessed_at ?? '2024-01-10T00:00:00.000Z',
     contradicts: overrides.contradicts,
   };
 }

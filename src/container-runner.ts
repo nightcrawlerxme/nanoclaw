@@ -163,7 +163,6 @@ function buildVolumeMounts(
     readonly: false,
   });
 
-
   // Outlook credentials directory (for Outlook MCP inside the container)
   const homeDir = os.homedir();
   const outlookDir = path.join(homeDir, '.outlook-mcp');
@@ -184,7 +183,6 @@ function buildVolumeMounts(
       readonly: false, // MCP needs to refresh OAuth tokens
     });
   }
-
 
   // Per-group IPC namespace: each group gets its own IPC directory
   // This prevents cross-group privilege escalation via IPC

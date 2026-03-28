@@ -34,7 +34,10 @@ describe('semantic-graph', () => {
 
   it('mergeConceptsIntoGraph adds new nodes for unseen concepts', () => {
     const graph = emptyGraph();
-    const updated = mergeConceptsIntoGraph(graph, ['machine learning', 'data science']);
+    const updated = mergeConceptsIntoGraph(graph, [
+      'machine learning',
+      'data science',
+    ]);
     const ids = updated.nodes.map((n) => n.id);
     expect(ids).toContain('machine-learning');
     expect(ids).toContain('data-science');
@@ -54,7 +57,9 @@ describe('semantic-graph', () => {
     const updated = mergeConceptsIntoGraph(graph, ['alpha', 'beta', 'gamma']);
     // 3 concepts => 3 edges: alpha-beta, alpha-gamma, beta-gamma
     expect(updated.edges).toHaveLength(3);
-    const sourceTargetPairs = updated.edges.map((e) => [e.source, e.target].sort().join('-'));
+    const sourceTargetPairs = updated.edges.map((e) =>
+      [e.source, e.target].sort().join('-'),
+    );
     expect(sourceTargetPairs).toContain('alpha-beta');
     expect(sourceTargetPairs).toContain('alpha-gamma');
     expect(sourceTargetPairs).toContain('beta-gamma');
@@ -79,7 +84,12 @@ describe('semantic-graph', () => {
       label: `Node ${i}`,
       weight: i + 1, // weights 1..10
     }));
-    const graph: SemanticGraph = { nodes, edges: [], updated_at: new Date().toISOString(), version: 1 };
+    const graph: SemanticGraph = {
+      nodes,
+      edges: [],
+      updated_at: new Date().toISOString(),
+      version: 1,
+    };
     const pruned = pruneGraph(graph, 5);
     expect(pruned.nodes).toHaveLength(5);
     // Should keep the 5 highest-weight nodes (weights 6..10)
@@ -94,10 +104,25 @@ describe('semantic-graph', () => {
       { id: 'also-keep', label: 'Also Keep', weight: 9 },
     ];
     const edges = [
-      { source: 'keep', target: 'prune', weight: 1, last_seen: new Date().toISOString() },
-      { source: 'keep', target: 'also-keep', weight: 2, last_seen: new Date().toISOString() },
+      {
+        source: 'keep',
+        target: 'prune',
+        weight: 1,
+        last_seen: new Date().toISOString(),
+      },
+      {
+        source: 'keep',
+        target: 'also-keep',
+        weight: 2,
+        last_seen: new Date().toISOString(),
+      },
     ];
-    const graph: SemanticGraph = { nodes, edges, updated_at: new Date().toISOString(), version: 1 };
+    const graph: SemanticGraph = {
+      nodes,
+      edges,
+      updated_at: new Date().toISOString(),
+      version: 1,
+    };
     const pruned = pruneGraph(graph, 2);
     expect(pruned.nodes.map((n) => n.id)).not.toContain('prune');
     // Edge involving 'prune' should be removed
@@ -112,7 +137,12 @@ describe('semantic-graph', () => {
       { id: 'ai', label: 'AI', weight: 5 },
       { id: 'ml', label: 'ML', weight: 3 },
     ];
-    const graph: SemanticGraph = { nodes, edges: [], updated_at: new Date().toISOString(), version: 1 };
+    const graph: SemanticGraph = {
+      nodes,
+      edges: [],
+      updated_at: new Date().toISOString(),
+      version: 1,
+    };
     const summary = getGraphContextSummary(graph);
     expect(typeof summary).toBe('string');
     expect(summary.length).toBeGreaterThan(0);

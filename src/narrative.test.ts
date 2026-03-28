@@ -94,7 +94,11 @@ describe('narrative', () => {
       },
     ];
 
-    const prompt = buildNarrativeUpdatePrompt('zeta', 'Current narrative.', events);
+    const prompt = buildNarrativeUpdatePrompt(
+      'zeta',
+      'Current narrative.',
+      events,
+    );
     expect(prompt).toContain('Reached 1000 users');
     expect(prompt).toContain('Churn rate dropped by 10%');
     expect(prompt).toContain('milestone');

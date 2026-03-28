@@ -59,8 +59,13 @@ describe('temporal-debt', () => {
 
   it('computeDebtScore returns ~1.0 for brand-new item with 0 escalations (< 1 day old)', () => {
     const now = new Date();
-    const createdAt = new Date(now.getTime() - 12 * 60 * 60 * 1000).toISOString(); // 12 hours ago
-    const score = computeDebtScore({ created_at: createdAt, escalation_count: 0 }, now);
+    const createdAt = new Date(
+      now.getTime() - 12 * 60 * 60 * 1000,
+    ).toISOString(); // 12 hours ago
+    const score = computeDebtScore(
+      { created_at: createdAt, escalation_count: 0 },
+      now,
+    );
     // 0.5 days * 1.5^0 = 0.5
     expect(score).toBeCloseTo(0.5, 5);
     expect(score).toBeGreaterThanOrEqual(0);
@@ -72,7 +77,10 @@ describe('temporal-debt', () => {
     const createdAt = new Date(
       now.getTime() - 7 * 24 * 60 * 60 * 1000,
     ).toISOString();
-    const score = computeDebtScore({ created_at: createdAt, escalation_count: 0 }, now);
+    const score = computeDebtScore(
+      { created_at: createdAt, escalation_count: 0 },
+      now,
+    );
     // 7 days * 1.5^0 = 7.0
     expect(score).toBeCloseTo(7.0, 5);
   });
@@ -82,7 +90,10 @@ describe('temporal-debt', () => {
     const createdAt = new Date(
       now.getTime() - 24 * 60 * 60 * 1000,
     ).toISOString();
-    const score = computeDebtScore({ created_at: createdAt, escalation_count: 2 }, now);
+    const score = computeDebtScore(
+      { created_at: createdAt, escalation_count: 2 },
+      now,
+    );
     // 1 day * 1.5^2 = 2.25
     expect(score).toBeCloseTo(2.25, 5);
   });
@@ -92,13 +103,18 @@ describe('temporal-debt', () => {
     const createdAt = new Date(
       now.getTime() - 200 * 24 * 60 * 60 * 1000,
     ).toISOString(); // 200 days ago
-    const score = computeDebtScore({ created_at: createdAt, escalation_count: 5 }, now);
+    const score = computeDebtScore(
+      { created_at: createdAt, escalation_count: 5 },
+      now,
+    );
     expect(score).toBe(100);
   });
 
   it('updateDebtScores persists computed scores to DB', () => {
     const now = new Date();
-    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const sevenDaysAgo = new Date(
+      now.getTime() - 7 * 24 * 60 * 60 * 1000,
+    ).toISOString();
 
     addDebt({
       id: 'debt-score-1',
@@ -198,9 +214,15 @@ describe('temporal-debt', () => {
     try {
       const sendMessage = vi.fn().mockResolvedValue(undefined);
 
-      startDebtMonitorLoop(sendMessage, { pollIntervalMs: 999999, escalationThreshold: 9999 });
+      startDebtMonitorLoop(sendMessage, {
+        pollIntervalMs: 999999,
+        escalationThreshold: 9999,
+      });
       // Running again without reset should be a no-op (guard)
-      startDebtMonitorLoop(sendMessage, { pollIntervalMs: 999999, escalationThreshold: 9999 });
+      startDebtMonitorLoop(sendMessage, {
+        pollIntervalMs: 999999,
+        escalationThreshold: 9999,
+      });
 
       _resetDebtMonitorForTests();
 

@@ -3,7 +3,12 @@ import http from 'http';
 import { readEnvFile } from '../env.js';
 import { logger } from '../logger.js';
 import { registerChannel, ChannelOpts } from './registry.js';
-import { Channel, OnChatMetadata, OnInboundMessage, RegisteredGroup } from '../types.js';
+import {
+  Channel,
+  OnChatMetadata,
+  OnInboundMessage,
+  RegisteredGroup,
+} from '../types.js';
 
 export interface WebhookChannelOpts {
   onMessage: OnInboundMessage;
@@ -15,7 +20,9 @@ export interface WebhookRoute {
   /** URL path to match (e.g., '/paperclip') */
   path: string;
   /** Parse the request body and return a message + sender, or null to silently ack */
-  handle: (data: Record<string, unknown>) => { message: string; sender: string } | null;
+  handle: (
+    data: Record<string, unknown>,
+  ) => { message: string; sender: string } | null;
 }
 
 const DEFAULT_PORT = 3200;
@@ -103,7 +110,13 @@ export class WebhookChannel implements Channel {
             const timestamp = new Date().toISOString();
             const msgId = `wh-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
-            this.opts.onChatMetadata(jid, timestamp, 'Webhook', 'webhook', false);
+            this.opts.onChatMetadata(
+              jid,
+              timestamp,
+              'Webhook',
+              'webhook',
+              false,
+            );
             this.opts.onMessage(jid, {
               id: msgId,
               chat_jid: jid,
@@ -114,7 +127,10 @@ export class WebhookChannel implements Channel {
               is_from_me: false,
             });
 
-            logger.info({ sender: senderName, length: message.length }, 'Webhook message received');
+            logger.info(
+              { sender: senderName, length: message.length },
+              'Webhook message received',
+            );
             res.writeHead(202, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ status: 'accepted', id: msgId }));
           } catch {
@@ -148,11 +164,16 @@ export class WebhookChannel implements Channel {
       logger.warn('Webhook: no linked JID configured for outbound messages');
       return;
     }
-    const target = this.siblingChannels.find((ch) => ch.ownsJid(this.linkedJid));
+    const target = this.siblingChannels.find((ch) =>
+      ch.ownsJid(this.linkedJid),
+    );
     if (target) {
       await target.sendMessage(this.linkedJid, text);
     } else {
-      logger.warn({ linkedJid: this.linkedJid }, 'Webhook: no channel owns linked JID');
+      logger.warn(
+        { linkedJid: this.linkedJid },
+        'Webhook: no channel owns linked JID',
+      );
     }
   }
 

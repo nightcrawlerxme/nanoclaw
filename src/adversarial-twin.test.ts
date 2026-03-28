@@ -51,9 +51,14 @@ describe('adversarial-twin', () => {
   it('buildAugmentedPrompt wraps rebuttal in a recognizable context block', () => {
     const originalPrompt = 'Explain binary search.';
     const mainResponse = 'Binary search divides the array in half repeatedly.';
-    const rebuttal = 'The response does not mention that the array must be sorted first.';
+    const rebuttal =
+      'The response does not mention that the array must be sorted first.';
 
-    const augmented = buildAugmentedPrompt(originalPrompt, mainResponse, rebuttal);
+    const augmented = buildAugmentedPrompt(
+      originalPrompt,
+      mainResponse,
+      rebuttal,
+    );
 
     expect(augmented).toContain(originalPrompt);
     expect(augmented).toContain(mainResponse);
