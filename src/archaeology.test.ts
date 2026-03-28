@@ -3,7 +3,12 @@ import os from 'os';
 import path from 'path';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { _initTestDatabase, getAllRegisteredGroups, getDb, setRegisteredGroup } from './db.js';
+import {
+  _initTestDatabase,
+  getAllRegisteredGroups,
+  getDb,
+  setRegisteredGroup,
+} from './db.js';
 import { GroupQueue } from './group-queue.js';
 import {
   analyzeGroupLogs,
@@ -21,19 +26,22 @@ beforeEach(() => {
 
 describe('archaeology', () => {
   it('parseContainerLog extracts durationMs from valid log', () => {
-    const log = '[2024-01-15T10:00:00.000Z] Group: my-group\nDuration: 12345ms\nExit code: 0\nHad Streaming Output: true';
+    const log =
+      '[2024-01-15T10:00:00.000Z] Group: my-group\nDuration: 12345ms\nExit code: 0\nHad Streaming Output: true';
     const entry = parseContainerLog(log);
     expect(entry.durationMs).toBe(12345);
   });
 
   it('parseContainerLog detects wasTimeout=true from TIMEOUT in log', () => {
-    const log = '[2024-01-15T10:00:00.000Z] Group: my-group\nDuration: 300000ms\nExit code: 1\nHad Streaming Output: false\nTIMEOUT';
+    const log =
+      '[2024-01-15T10:00:00.000Z] Group: my-group\nDuration: 300000ms\nExit code: 1\nHad Streaming Output: false\nTIMEOUT';
     const entry = parseContainerLog(log);
     expect(entry.wasTimeout).toBe(true);
   });
 
   it('parseContainerLog detects hadOutput=false when Had Streaming Output: false', () => {
-    const log = '[2024-01-15T10:00:00.000Z] Group: my-group\nDuration: 5000ms\nExit code: 0\nHad Streaming Output: false';
+    const log =
+      '[2024-01-15T10:00:00.000Z] Group: my-group\nDuration: 5000ms\nExit code: 0\nHad Streaming Output: false';
     const entry = parseContainerLog(log);
     expect(entry.hadOutput).toBe(false);
   });
@@ -56,7 +64,9 @@ describe('archaeology', () => {
   });
 
   it('analyzeGroupLogs returns silentFailureCount=0 for logs dir with no failures', () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nanoclaw-arch-test-'));
+    const tmpDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'nanoclaw-arch-test-'),
+    );
     try {
       // Write two logs with exit code 0 and output
       fs.writeFileSync(
@@ -76,7 +86,9 @@ describe('archaeology', () => {
   });
 
   it('analyzeGroupLogs correctly counts slow tasks above slowThresholdMs', () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nanoclaw-arch-test-'));
+    const tmpDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'nanoclaw-arch-test-'),
+    );
     try {
       // Fast task: 5000ms
       fs.writeFileSync(
@@ -94,7 +106,9 @@ describe('archaeology', () => {
         '[2024-01-15T12:00:00.000Z] Group: test\nDuration: 120000ms\nExit code: 0\nHad Streaming Output: true',
       );
 
-      const report = analyzeGroupLogs('test-group', tmpDir, { slowThresholdMs: 60000 });
+      const report = analyzeGroupLogs('test-group', tmpDir, {
+        slowThresholdMs: 60000,
+      });
       expect(report.slowTaskCount).toBe(2);
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -149,6 +163,14 @@ describe('archaeology', () => {
 
     const ids = tasks.map((t) => t.id).sort();
     expect(ids).toEqual(['archaeology-alpha', 'archaeology-beta']);
+
+    // chat_jid must be the real registered JID, not a fabricated string
+    const fullTasks = db
+      .prepare("SELECT id, chat_jid FROM scheduled_tasks WHERE id LIKE 'archaeology-%'")
+      .all() as { id: string; chat_jid: string }[];
+    const jidMap = Object.fromEntries(fullTasks.map((t) => [t.id, t.chat_jid]));
+    expect(jidMap['archaeology-alpha']).toBe('111@g.us');
+    expect(jidMap['archaeology-beta']).toBe('222@g.us');
 
     // Call again — should be idempotent, no duplicates
     scheduleArchaeologyTask(queue, getAllRegisteredGroups);

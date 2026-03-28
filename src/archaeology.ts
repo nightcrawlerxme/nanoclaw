@@ -177,17 +177,24 @@ export function analyzeGroupLogs(
     anomalies.push(`${timeoutCount} task(s) timed out`);
   }
 
-  const failureRate = entries.filter((e) => e.exitCode !== 0).length / entries.length;
+  const failureRate =
+    entries.filter((e) => e.exitCode !== 0).length / entries.length;
   if (failureRate > 0.3) {
     const pct = Math.round(failureRate * 100);
     anomalies.push(`High failure rate: ${pct}% of tasks exited non-zero`);
   }
 
   if (silentFailureCount > 0) {
-    anomalies.push(`${silentFailureCount} silent failure(s) detected (non-zero exit, no output)`);
+    anomalies.push(
+      `${silentFailureCount} silent failure(s) detected (non-zero exit, no output)`,
+    );
   }
 
-  if (p95DurationMs !== null && p50DurationMs !== null && p95DurationMs > p50DurationMs * 5) {
+  if (
+    p95DurationMs !== null &&
+    p50DurationMs !== null &&
+    p95DurationMs > p50DurationMs * 5
+  ) {
     anomalies.push(
       `High duration variance: p95 (${p95DurationMs}ms) is more than 5x p50 (${p50DurationMs}ms)`,
     );
@@ -289,7 +296,7 @@ export function scheduleArchaeologyTask(
   const groups = registeredGroups();
   const cronExpr = '0 4 * * 0';
 
-  for (const group of Object.values(groups)) {
+  for (const [jid, group] of Object.entries(groups)) {
     const taskId = `archaeology-${group.folder}`;
 
     const existing = getDb()
@@ -310,7 +317,7 @@ export function scheduleArchaeologyTask(
     createTask({
       id: taskId,
       group_folder: group.folder,
-      chat_jid: `archaeology-${group.folder}`,
+      chat_jid: jid,
       prompt: `Generate an archaeology performance report for group "${group.folder}". Analyze container log files and summarize performance metrics, slow tasks, and anomalies.`,
       schedule_type: 'cron',
       schedule_value: cronExpr,

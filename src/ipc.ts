@@ -5,7 +5,7 @@ import { CronExpressionParser } from 'cron-parser';
 
 import { DATA_DIR, IPC_POLL_INTERVAL, TIMEZONE } from './config.js';
 import { AvailableGroup } from './container-runner.js';
-import { createTask, deleteTask, getTaskById, updateTask } from './db.js';
+import { createTask, deleteTask, getDb, getTaskById, updateTask } from './db.js';
 import { addDebt, resolveDebt } from './temporal-debt.js';
 import { recordNarrativeEvent, NarrativeEventType } from './narrative.js';
 import { activateShadowGroup } from './shadow-mode.js';
@@ -519,23 +519,48 @@ export async function processTaskIpc(
     case 'add_debt':
       if (data.description) {
         addDebt({
-          id: data.debtId || `debt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          id:
+            data.debtId ||
+            `debt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           group_folder: sourceGroup,
           chat_jid: (() => {
-            const g = Object.values(registeredGroups).find(g => g.folder === sourceGroup);
-            return g ? Object.entries(registeredGroups).find(([, grp]) => grp.folder === sourceGroup)?.[0] || '' : '';
+            const g = Object.values(registeredGroups).find(
+              (g) => g.folder === sourceGroup,
+            );
+            return g
+              ? Object.entries(registeredGroups).find(
+                  ([, grp]) => grp.folder === sourceGroup,
+                )?.[0] || ''
+              : '';
           })(),
           description: data.description,
           created_at: new Date().toISOString(),
           resolved_at: null,
           source_message_id: data.sourceMessageId || null,
         });
-        logger.info({ sourceGroup, description: data.description }, 'Debt added via IPC');
+        logger.info(
+          { sourceGroup, description: data.description },
+          'Debt added via IPC',
+        );
       }
       break;
 
     case 'resolve_debt':
       if (data.debtId) {
+        const debtRow = getDb()
+          .prepare('SELECT group_folder FROM temporal_debt WHERE id = ?')
+          .get(data.debtId) as { group_folder: string } | undefined;
+        if (!debtRow) {
+          logger.warn({ debtId: data.debtId, sourceGroup }, 'resolve_debt: debt not found');
+          break;
+        }
+        if (!isMain && debtRow.group_folder !== sourceGroup) {
+          logger.warn(
+            { debtId: data.debtId, sourceGroup, ownerGroup: debtRow.group_folder },
+            'resolve_debt: unauthorized — group can only resolve its own debt',
+          );
+          break;
+        }
         resolveDebt(data.debtId);
         logger.info({ debtId: data.debtId, sourceGroup }, 'Debt resolved via IPC');
       }
@@ -543,25 +568,46 @@ export async function processTaskIpc(
 
     case 'record_narrative_event':
       if (data.eventType && data.description) {
-        const validTypes: NarrativeEventType[] = ['task_complete', 'milestone', 'failure', 'insight'];
+        const validTypes: NarrativeEventType[] = [
+          'task_complete',
+          'milestone',
+          'failure',
+          'insight',
+        ];
         if (validTypes.includes(data.eventType as NarrativeEventType)) {
-          recordNarrativeEvent(sourceGroup, data.eventType as NarrativeEventType, data.description);
-          logger.info({ sourceGroup, eventType: data.eventType }, 'Narrative event recorded via IPC');
+          recordNarrativeEvent(
+            sourceGroup,
+            data.eventType as NarrativeEventType,
+            data.description,
+          );
+          logger.info(
+            { sourceGroup, eventType: data.eventType },
+            'Narrative event recorded via IPC',
+          );
         } else {
-          logger.warn({ eventType: data.eventType }, 'Invalid narrative event type');
+          logger.warn(
+            { eventType: data.eventType },
+            'Invalid narrative event type',
+          );
         }
       }
       break;
 
     case 'activate_shadow_group': {
       if (!isMain) {
-        logger.warn({ sourceGroup }, 'Unauthorized activate_shadow_group attempt blocked');
+        logger.warn(
+          { sourceGroup },
+          'Unauthorized activate_shadow_group attempt blocked',
+        );
         break;
       }
       const shadowTargetJid = data.targetJid ?? data.chatJid;
       if (shadowTargetJid) {
         activateShadowGroup(shadowTargetJid);
-        logger.info({ targetJid: shadowTargetJid }, 'Shadow group activated via IPC');
+        logger.info(
+          { targetJid: shadowTargetJid },
+          'Shadow group activated via IPC',
+        );
       }
       break;
     }
@@ -572,21 +618,43 @@ export async function processTaskIpc(
           ttlHours: data.ttlHours,
           decayRate: data.decayRate,
         });
-        logger.info({ sourceGroup, signal: data.signal }, 'Whisper emitted via IPC');
+        logger.info(
+          { sourceGroup, signal: data.signal },
+          'Whisper emitted via IPC',
+        );
       }
       break;
 
     case 'log_uncertainty':
-      if (data.responseSummary && data.uncertaintySource && data.confidence !== undefined) {
-        const validSources: UncertaintySource[] = ['ambiguous_query', 'missing_context', 'conflicting_info', 'novel_domain', 'other'];
-        if (!validSources.includes(data.uncertaintySource as UncertaintySource)) {
-          logger.warn({ uncertaintySource: data.uncertaintySource }, 'Invalid uncertainty source');
+      if (
+        data.responseSummary &&
+        data.uncertaintySource &&
+        data.confidence !== undefined
+      ) {
+        const validSources: UncertaintySource[] = [
+          'ambiguous_query',
+          'missing_context',
+          'conflicting_info',
+          'novel_domain',
+          'other',
+        ];
+        if (
+          !validSources.includes(data.uncertaintySource as UncertaintySource)
+        ) {
+          logger.warn(
+            { uncertaintySource: data.uncertaintySource },
+            'Invalid uncertainty source',
+          );
           break;
         }
         try {
-          const targetGroup = Object.values(registeredGroups).find(g => g.folder === sourceGroup);
+          const targetGroup = Object.values(registeredGroups).find(
+            (g) => g.folder === sourceGroup,
+          );
           const chatJid = targetGroup
-            ? (Object.entries(registeredGroups).find(([, g]) => g.folder === sourceGroup)?.[0] || '')
+            ? Object.entries(registeredGroups).find(
+                ([, g]) => g.folder === sourceGroup,
+              )?.[0] || ''
             : '';
           logUncertainty({
             group_folder: sourceGroup,
@@ -596,9 +664,15 @@ export async function processTaskIpc(
             uncertainty_source: data.uncertaintySource as UncertaintySource,
             uncertainty_detail: data.uncertaintyDetail || null,
           });
-          logger.info({ sourceGroup, confidence: data.confidence }, 'Uncertainty logged via IPC');
+          logger.info(
+            { sourceGroup, confidence: data.confidence },
+            'Uncertainty logged via IPC',
+          );
         } catch (err) {
-          logger.warn({ err, sourceGroup }, 'Failed to log uncertainty via IPC');
+          logger.warn(
+            { err, sourceGroup },
+            'Failed to log uncertainty via IPC',
+          );
         }
       }
       break;
