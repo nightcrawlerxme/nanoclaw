@@ -42,7 +42,12 @@ export class WebhookChannel implements Channel {
   /** Plugin routes registered by skills */
   private routes: WebhookRoute[] = [];
 
-  constructor(port: number, linkedJid: string, secret: string, opts: WebhookChannelOpts) {
+  constructor(
+    port: number,
+    linkedJid: string,
+    secret: string,
+    opts: WebhookChannelOpts,
+  ) {
     this.port = port;
     this.linkedJid = linkedJid;
     this.secret = secret;
@@ -83,15 +88,18 @@ export class WebhookChannel implements Channel {
       const matchedRoute = this.routes.find((r) => req.url === r.path);
       if (req.method === 'POST' && (req.url === '/webhook' || matchedRoute)) {
         let body = '';
+        let responded = false;
         req.on('data', (chunk) => {
           body += chunk;
           if (body.length > 1_000_000) {
+            responded = true;
             res.writeHead(413);
             res.end('Payload too large');
             req.destroy();
           }
         });
         req.on('end', () => {
+          if (responded) return;
           try {
             const data = JSON.parse(body);
 
@@ -215,7 +223,11 @@ export function getWebhookChannel(): WebhookChannel | null {
 }
 
 registerChannel('webhook', (opts: ChannelOpts) => {
-  const envVars = readEnvFile(['WEBHOOK_PORT', 'WEBHOOK_LINKED_JID', 'WEBHOOK_SECRET']);
+  const envVars = readEnvFile([
+    'WEBHOOK_PORT',
+    'WEBHOOK_LINKED_JID',
+    'WEBHOOK_SECRET',
+  ]);
   const port = parseInt(
     process.env.WEBHOOK_PORT || envVars.WEBHOOK_PORT || String(DEFAULT_PORT),
     10,
@@ -228,7 +240,9 @@ registerChannel('webhook', (opts: ChannelOpts) => {
   }
   const secret = process.env.WEBHOOK_SECRET || envVars.WEBHOOK_SECRET || '';
   if (!secret) {
-    logger.warn('Webhook: WEBHOOK_SECRET not set — endpoint is unauthenticated');
+    logger.warn(
+      'Webhook: WEBHOOK_SECRET not set — endpoint is unauthenticated',
+    );
   }
   webhookInstance = new WebhookChannel(port, linkedJid, secret, opts);
   return webhookInstance;
