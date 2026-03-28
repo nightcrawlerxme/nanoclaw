@@ -83,14 +83,16 @@ Then run `/setup`. Claude Code handles everything: dependencies, authentication,
 
 ## What It Supports
 
-- **Multi-channel messaging** - Talk to your assistant from WhatsApp, Telegram, Discord, Slack, or Gmail. Add channels with skills like `/add-whatsapp` or `/add-telegram`. Run one or many at the same time.
+- **Multi-channel messaging** - Talk to your assistant from WhatsApp, Telegram, Discord, Slack, Gmail, or Outlook. Add channels with skills like `/add-whatsapp` or `/add-telegram`. Run one or many at the same time.
 - **Isolated group context** - Each group has its own `CLAUDE.md` memory, isolated filesystem, and runs in its own container sandbox with only that filesystem mounted to it.
 - **Main channel** - Your private channel (self-chat) for admin control; every group is completely isolated
 - **Scheduled tasks** - Recurring jobs that run Claude and can message you back
 - **Web access** - Search and fetch content from the Web
 - **Container isolation** - Agents are sandboxed in [Docker Sandboxes](https://nanoclaw.dev/blog/nanoclaw-docker-sandboxes) (micro VM isolation), Apple Container (macOS), or Docker (macOS/Linux)
 - **Agent Swarms** - Spin up teams of specialized agents that collaborate on complex tasks
-- **Optional integrations** - Add Gmail (`/add-gmail`) and more via skills
+- **Webhook channel** - Inbound HTTP webhook (`POST /webhook`) so CI/CD pipelines, monitoring tools, and project management apps can trigger agents directly
+- **Voice transcription** - WhatsApp voice messages are automatically transcribed via OpenAI Whisper before reaching the agent
+- **Optional integrations** - Google Workspace (`/add-google-workspace`), Outlook (`/add-outlook`), Gmail (`/add-gmail`), and more via skills
 
 ## Autonomous Intelligence Features
 
@@ -151,6 +153,39 @@ If you want to add Telegram support, don't create a PR that adds Telegram to the
 
 Users then run `/add-telegram` on their fork and get clean code that does exactly what they need, not a bloated system trying to support every use case.
 
+### Available Skills (via Marketplace)
+
+Skills auto-load from the [nanoclaw-skills marketplace](https://github.com/qwibitai/nanoclaw-skills) at startup — no manual install needed.
+
+**Channels**
+- `/add-whatsapp` - WhatsApp (QR or pairing code)
+- `/add-telegram` - Telegram bot
+- `/add-discord` - Discord bot
+- `/add-slack` - Slack Socket Mode
+- `/add-gmail` - Gmail as channel or tool
+- `/add-outlook` - Microsoft Outlook/Teams/Calendar (MSAL OAuth, 75 MCP tools)
+- `/add-webhook` - Generic inbound HTTP webhook
+
+**Google Workspace**
+- `/add-google-workspace` - Unified Google CLI MCP (Gmail, Drive, Sheets, Docs, Calendar)
+
+**Enhancements**
+- `/add-voice-transcription` - OpenAI Whisper transcription for voice messages
+- `/add-image-vision` - WhatsApp image attachment support
+- `/add-pdf-reader` - PDF text extraction
+- `/add-reactions` - WhatsApp emoji reactions
+- `/add-ollama-tool` - Local LLM via Ollama (offload cheaper tasks)
+- `/add-compact` - Manual `/compact` session command
+- `/add-telegram-swarm` - Multi-bot agent teams on Telegram
+- `/add-parallel` - Parallel agent execution
+
+**Operations**
+- `/setup` - First-time installation and authentication
+- `/update-nanoclaw` - Merge upstream changes into your fork
+- `/update-skills` - Check for and apply skill branch updates
+- `/debug` - Troubleshoot container issues and logs
+- `/customize` - Guided changes: channels, integrations, behavior
+
 ### RFS (Request for Skills)
 
 Skills we'd like to see:
@@ -181,12 +216,17 @@ For the full architecture details, see [docs/SPEC.md](docs/SPEC.md).
 Key files:
 - `src/index.ts` - Orchestrator: state, message loop, agent invocation
 - `src/channels/registry.ts` - Channel registry (self-registration at startup)
+- `src/channels/outlook.ts` - Outlook channel (MSAL OAuth, email/calendar/Teams polling)
+- `src/channels/webhook.ts` - Generic inbound webhook channel with plugin route system
+- `src/plugins/paperclip.ts` - Paperclip project management webhook plugin
+- `src/transcription.ts` - Voice message transcription via OpenAI Whisper
 - `src/ipc.ts` - IPC watcher and task processing
 - `src/router.ts` - Message formatting and outbound routing
 - `src/group-queue.ts` - Per-group queue with global concurrency limit
-- `src/container-runner.ts` - Spawns streaming agent containers
+- `src/container-runner.ts` - Spawns streaming agent containers (mounts Outlook/GWS credentials)
 - `src/task-scheduler.ts` - Runs scheduled tasks
 - `src/db.ts` - SQLite operations (messages, groups, sessions, state)
+- `container/agent-runner/src/gws-mcp-stdio.ts` - Google Workspace CLI MCP (unified Gmail/Drive/Calendar/Sheets)
 - `groups/*/CLAUDE.md` - Per-group memory
 - `src/task-lifecycle.ts` - Biological task lifecycle state machine
 - `src/whispers.ts` - Cross-group signal propagation and decay
