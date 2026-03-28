@@ -132,17 +132,25 @@ function classifyOperation(command: string): 'read' | 'write' {
   const lower = command.toLowerCase();
   const tokens = lower.split(/\s+/);
 
-  // Check read patterns first (more specific matches)
-  for (const token of tokens) {
-    if (READ_PATTERNS.some(p => token === p || token.endsWith(p))) {
-      return 'read';
+  // Only inspect the first 3 tokens (service + subcommand + action).
+  // Flag values that follow --flags (e.g. "--subject list") must not be
+  // matched against read patterns — doing so would let a write command like
+  // "gmail +send --subject list" be misclassified as read and skip the
+  // nonce confirmation flow.
+  const positionalTokens = tokens.slice(0, 3);
+
+  // Check write patterns first — write takes priority over read so that a
+  // command cannot be downgraded to read by a coincidental read-pattern word.
+  for (const token of positionalTokens) {
+    if (WRITE_PATTERNS.some(p => token === p || token.endsWith(p))) {
+      return 'write';
     }
   }
 
-  // Check write patterns
-  for (const token of tokens) {
-    if (WRITE_PATTERNS.some(p => token === p || token.endsWith(p))) {
-      return 'write';
+  // Check read patterns
+  for (const token of positionalTokens) {
+    if (READ_PATTERNS.some(p => token === p || token.endsWith(p))) {
+      return 'read';
     }
   }
 
