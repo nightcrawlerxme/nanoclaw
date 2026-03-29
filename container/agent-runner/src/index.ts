@@ -117,6 +117,26 @@ function log(message: string): void {
   console.error(`[agent-runner] ${message}`);
 }
 
+function loadOutlookEnvFromMountedFile(): Record<string, string> {
+  const outlookEnvPath = '/home/node/.outlook-mcp/.env';
+  try {
+    if (!fs.existsSync(outlookEnvPath)) return {};
+    const envContent = fs.readFileSync(outlookEnvPath, 'utf-8');
+    const result: Record<string, string> = {};
+    for (const line of envContent.split('\n')) {
+      const match = line.match(
+        /^(MS_TENANT_ID|MS_CLIENT_ID|MS_CLIENT_SECRET)=(.+)$/,
+      );
+      if (match) {
+        result[match[1]] = match[2].trim();
+      }
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
+
 function getSessionSummary(sessionId: string, transcriptPath: string): string | null {
   const projectDir = path.dirname(transcriptPath);
   const indexPath = path.join(projectDir, 'sessions-index.json');
@@ -388,6 +408,7 @@ async function runQuery(
   if (extraDirs.length > 0) {
     log(`Additional directories: ${extraDirs.join(', ')}`);
   }
+  const outlookEnv = loadOutlookEnvFromMountedFile();
 
   for await (const message of query({
     prompt: stream,
@@ -438,15 +459,18 @@ async function runQuery(
               },
             }
           : {}),
-        // Only register outlook when credentials are injected
-        ...(process.env.MS_CLIENT_ID
+        // Only register outlook when credentials are mounted inside the container
+        ...(outlookEnv.MS_CLIENT_ID
           ? {
               outlook: {
                 command: 'npx',
                 args: ['-y', 'outlook-mcp'],
                 env: {
-                  MS_CLIENT_ID: process.env.MS_CLIENT_ID,
-                  MS_CLIENT_SECRET: process.env.MS_CLIENT_SECRET || '',
+                  MS_CLIENT_ID: outlookEnv.MS_CLIENT_ID,
+                  MS_CLIENT_SECRET: outlookEnv.MS_CLIENT_SECRET || '',
+                  ...(outlookEnv.MS_TENANT_ID
+                    ? { MS_TENANT_ID: outlookEnv.MS_TENANT_ID }
+                    : {}),
                   HOME: '/home/node',
                 },
               },

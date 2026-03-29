@@ -57,25 +57,6 @@ interface VolumeMount {
   readonly: boolean;
 }
 
-export function injectOutlookEnvVars(args: string[]): void {
-  const outlookEnvPath = path.join(os.homedir(), '.outlook-mcp', '.env');
-  if (!fs.existsSync(outlookEnvPath)) return;
-
-  try {
-    const envContent = fs.readFileSync(outlookEnvPath, 'utf-8');
-    for (const line of envContent.split('\n')) {
-      const match = line.match(
-        /^(MS_TENANT_ID|MS_CLIENT_ID|MS_CLIENT_SECRET)=(.+)$/,
-      );
-      if (match) {
-        args.push('-e', `${match[1]}=${match[2].trim()}`);
-      }
-    }
-  } catch (err) {
-    logger.warn({ err, outlookEnvPath }, 'Failed to load Outlook env vars');
-  }
-}
-
 function buildVolumeMounts(
   group: RegisteredGroup,
   isMain: boolean,
@@ -289,8 +270,6 @@ function buildContainerArgs(
   } else {
     args.push('-e', 'CLAUDE_CODE_OAUTH_TOKEN=placeholder');
   }
-
-  injectOutlookEnvVars(args);
 
   // Runtime-specific args for host gateway resolution
   args.push(...hostGatewayArgs());
