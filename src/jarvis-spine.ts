@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import Database from 'better-sqlite3';
 import fs from 'fs';
 import path from 'path';
@@ -7,11 +8,12 @@ function json(value: unknown): string {
 }
 
 function stableId(prefix: string, input: string): string {
-  let hash = 0;
-  for (let i = 0; i < input.length; i++) {
-    hash = (hash * 31 + input.charCodeAt(i)) >>> 0;
-  }
-  return `${prefix}_${hash.toString(16)}`;
+  const hash = crypto
+    .createHash('sha256')
+    .update(input)
+    .digest('hex')
+    .slice(0, 16);
+  return `${prefix}_${hash}`;
 }
 
 function getDbPath(): string {

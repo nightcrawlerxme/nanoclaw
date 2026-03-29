@@ -14,9 +14,12 @@ import {
   storeMessage,
   updateTask,
 } from './db.js';
+import { _resetJarvisSpineForTests } from './jarvis-spine.js';
 
 beforeEach(() => {
   _initTestDatabase();
+  _resetJarvisSpineForTests();
+  delete process.env.JARVIS_SPINE_DB_PATH;
 });
 
 // Helper to store a message using the normalized NewMessage interface
@@ -137,6 +140,27 @@ describe('storeMessage', () => {
     );
     expect(messages).toHaveLength(1);
     expect(messages[0].content).toBe('updated');
+  });
+
+  it('does not fail message storage when the jarvis spine is unavailable', () => {
+    process.env.JARVIS_SPINE_DB_PATH = '/dev/null/jarvis.db';
+    storeChatMetadata('group@g.us', '2024-01-01T00:00:00.000Z');
+
+    store({
+      id: 'msg-safe',
+      chat_jid: 'group@g.us',
+      sender: '123@s.whatsapp.net',
+      sender_name: 'Alice',
+      content: 'still store the message',
+      timestamp: '2024-01-01T00:00:06.000Z',
+    });
+
+    const messages = getMessagesSince(
+      'group@g.us',
+      '2024-01-01T00:00:00.000Z',
+      'Andy',
+    );
+    expect(messages.some((m) => m.id === 'msg-safe')).toBe(true);
   });
 });
 

@@ -42,6 +42,22 @@ function resolveJarvisEntities(text: string): string[] {
   return [...refs];
 }
 
+function safeUpsertJarvisEntity(params: Parameters<typeof upsertJarvisEntity>[0]) {
+  try {
+    upsertJarvisEntity(params);
+  } catch (err) {
+    logger.warn({ err }, 'Failed to upsert jarvis entity (non-fatal)');
+  }
+}
+
+function safeUpsertJarvisEvent(params: Parameters<typeof upsertJarvisEvent>[0]) {
+  try {
+    upsertJarvisEvent(params);
+  } catch (err) {
+    logger.warn({ err }, 'Failed to write jarvis event (non-fatal)');
+  }
+}
+
 /** @internal - exposes the raw database handle for feature modules. */
 export function getDb(): Database.Database {
   return db;
@@ -458,7 +474,7 @@ export function storeChatMetadata(
   }
 
   if (isGroup && name) {
-    upsertJarvisEntity({
+    safeUpsertJarvisEntity({
       entity_id: `entity_group_${chatJid.replace(/[^a-zA-Z0-9]+/g, '_')}`,
       entity_type: 'conversation',
       name,
@@ -546,7 +562,7 @@ export function storeMessage(msg: NewMessage): void {
   );
 
   if (!msg.is_bot_message && (msg.content || '').trim().length > 0) {
-    upsertJarvisEvent({
+    safeUpsertJarvisEvent({
       source: 'nanoclaw',
       source_key: `message:${msg.chat_jid}:${msg.id}`,
       event_type: 'conversation_signal',
@@ -787,7 +803,7 @@ export function logTaskRun(log: TaskRunLog): void {
     log.error,
   );
 
-  upsertJarvisEvent({
+  safeUpsertJarvisEvent({
     source: 'nanoclaw_scheduler',
     source_key: `task_run:${log.task_id}:${log.run_at}:${log.status}`,
     event_type: 'task_outcome',
@@ -928,7 +944,7 @@ export function setRegisteredGroup(jid: string, group: RegisteredGroup): void {
     group.shadowActivationThreshold ?? 10,
   );
 
-  upsertJarvisEntity({
+  safeUpsertJarvisEntity({
     entity_id: `entity_group_${jid.replace(/[^a-zA-Z0-9]+/g, '_')}`,
     entity_type: 'conversation',
     name: group.name,
