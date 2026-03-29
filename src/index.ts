@@ -66,6 +66,7 @@ import { startSchedulerLoop } from './task-scheduler.js';
 import { startDebtMonitorLoop } from './temporal-debt.js';
 import { startLifecycleMonitorLoop } from './task-lifecycle.js';
 import { startWhisperDecayLoop, injectWhisperContext } from './whispers.js';
+import { buildSemanticMemoryContext } from './semantic-memory.js';
 import { scheduleCircadianTask } from './circadian.js';
 import { scheduleEmergenceTask } from './emergence.js';
 import { scheduleUncertaintyReport } from './uncertainty.js';
@@ -213,7 +214,14 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
   }
 
   const rawPrompt = formatMessages(missedMessages, TIMEZONE);
-  const prompt = injectWhisperContext(group.folder, rawPrompt);
+  const semanticMemory = await buildSemanticMemoryContext(
+    group.folder,
+    rawPrompt,
+  );
+  const promptCore = injectWhisperContext(group.folder, rawPrompt);
+  const prompt = semanticMemory
+    ? `${semanticMemory}\n\n${promptCore}`
+    : promptCore;
 
   // Advance cursor so the piping path in startMessageLoop won't re-fetch
   // these messages. Save the old cursor so we can roll back on error.

@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@azure/identity": "^4.13.1",
+    "@lancedb/lancedb": "^0.27.1",
     "@microsoft/microsoft-graph-client": "^3.0.7",
     "@whiskeysockets/baileys": "^7.0.0-rc.9",
     "better-sqlite3": "^11.8.1",

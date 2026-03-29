@@ -67,7 +67,19 @@ For business tasks, dispatch to the WAIT-Tech crew:
 ```bash
 RESPONSE=$(curl -s -X POST http://host.docker.internal:8080/api/task \
   -H "Content-Type: application/json" \
-  -d '{"dept": "auto", "request": "YOUR TASK HERE"}' \
+  -d '{
+    "dept": "auto",
+    "request": "YOUR TASK HERE",
+    "source": "nanoclaw",
+    "context": {
+      "channel": "whatsapp_main",
+      "semantic_memory_refs": [
+        {"id": "group:block-id", "why": "relevant memory snippet"},
+        {"id": "global:block-id", "why": "shared preference or standing instruction"}
+      ],
+      "recent_summary": "1-2 sentence summary of the relevant prior context"
+    }
+  }' \
   --max-time 1800)
 STATUS=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status',''))" 2>/dev/null)
 RESULT=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('result',''))" 2>/dev/null)
@@ -77,6 +89,8 @@ TASK_ID=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.st
 If `STATUS` is `running_background` or `duplicate`: tell Joseph the result will arrive via WhatsApp and DO NOT retry.
 If `STATUS` is `ok`: format and send `$RESULT` to Joseph.
 If `STATUS` is `error`: apologize and report `$RESULT`.
+
+When dispatching to CrewOps, include the most relevant semantic memory refs from the prompt context whenever they materially affect the task. Keep it short: 2-3 refs max.
 
 Poll a running task: `curl -s http://host.docker.internal:8080/api/task/result/$TASK_ID`
 
