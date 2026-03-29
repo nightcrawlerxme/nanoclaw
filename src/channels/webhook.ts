@@ -90,6 +90,7 @@ export class WebhookChannel implements Channel {
         let body = '';
         let responded = false;
         req.on('data', (chunk) => {
+          if (responded) return;
           body += chunk;
           if (body.length > 1_000_000) {
             responded = true;

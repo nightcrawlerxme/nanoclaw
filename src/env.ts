@@ -9,10 +9,16 @@ import { logger } from './logger.js';
  * so they don't leak to child processes.
  */
 export function readEnvFile(keys: string[]): Record<string, string> {
-  const candidates = [
-    path.join(process.cwd(), '.env'),
-    path.join(process.cwd(), '..', '.env'),
-  ];
+  const candidateSet = new Set<string>();
+  const explicitEnvFile = process.env.NANOCLAW_ENV_FILE?.trim();
+  if (explicitEnvFile) {
+    candidateSet.add(path.resolve(explicitEnvFile));
+  }
+  candidateSet.add(path.join(process.cwd(), '.env'));
+  if (process.env.NANOCLAW_ALLOW_PARENT_ENV === 'true') {
+    candidateSet.add(path.join(process.cwd(), '..', '.env'));
+  }
+  const candidates = [...candidateSet];
 
   const contents: Array<{ envFile: string; content: string }> = [];
   for (const envFile of candidates) {
@@ -27,7 +33,7 @@ export function readEnvFile(keys: string[]): Record<string, string> {
   }
 
   if (contents.length === 0) {
-    logger.debug('.env file not found in cwd or parent, using defaults');
+    logger.debug('.env file not found in configured locations, using defaults');
     return {};
   }
 

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { EventEmitter } from 'events';
+import path from 'path';
 import { PassThrough } from 'stream';
 
 // Sentinel markers must match container-runner.ts
@@ -86,7 +87,13 @@ vi.mock('child_process', async () => {
   };
 });
 
-import { runContainerAgent, ContainerOutput } from './container-runner.js';
+import fs from 'fs';
+
+import {
+  injectOutlookEnvVars,
+  runContainerAgent,
+  ContainerOutput,
+} from './container-runner.js';
 import type { RegisteredGroup } from './types.js';
 
 const testGroup: RegisteredGroup = {
@@ -206,5 +213,35 @@ describe('container-runner timeout behavior', () => {
     const result = await resultPromise;
     expect(result.status).toBe('success');
     expect(result.newSessionId).toBe('session-456');
+  });
+});
+
+describe('injectOutlookEnvVars', () => {
+  it('injects Outlook credentials from ~/.outlook-mcp/.env when present', () => {
+    vi.mocked(fs.existsSync).mockImplementation((filePath) =>
+      String(filePath).endsWith(path.join('.outlook-mcp', '.env')),
+    );
+    vi.mocked(fs.readFileSync).mockImplementation((filePath) => {
+      if (String(filePath).endsWith(path.join('.outlook-mcp', '.env'))) {
+        return [
+          'MS_CLIENT_ID=client-id',
+          'MS_CLIENT_SECRET=super-secret',
+          'MS_TENANT_ID=tenant-id',
+        ].join('\n');
+      }
+      return '';
+    });
+
+    const args: string[] = [];
+    injectOutlookEnvVars(args);
+
+    expect(args).toEqual([
+      '-e',
+      'MS_CLIENT_ID=client-id',
+      '-e',
+      'MS_CLIENT_SECRET=super-secret',
+      '-e',
+      'MS_TENANT_ID=tenant-id',
+    ]);
   });
 });
