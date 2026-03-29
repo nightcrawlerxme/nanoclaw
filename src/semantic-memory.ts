@@ -391,10 +391,6 @@ export async function retrieveRelevantMemories(
     .slice(0, maxMatches);
 
   await touchMatchedBlocks(matches, groupsDir);
-  if (matches.length > 0) {
-    const refreshedSources = loadMemorySources(groupFolder, groupsDir);
-    await persistSources(groupFolder, refreshedSources, embedTexts, groupsDir);
-  }
 
   return matches;
 }
