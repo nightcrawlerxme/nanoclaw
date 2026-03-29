@@ -213,7 +213,7 @@ export class WhatsAppChannel implements Channel {
 
             // Skip protocol messages with no text content (encryption keys, read receipts, etc.)
             // but allow voice messages through for transcription
-            if (!content && !isVoiceMessage(msg)) continue;
+            if (!content && !isVoiceMessage(normalized)) continue;
 
             const sender = msg.key.participant || msg.key.remoteJid || '';
             const senderName = msg.pushName || sender.split('@')[0];
@@ -229,7 +229,7 @@ export class WhatsAppChannel implements Channel {
 
             // Transcribe voice messages before storing
             let finalContent = content;
-            if (isVoiceMessage(msg)) {
+            if (isVoiceMessage(normalized)) {
               try {
                 const transcript = await transcribeAudioMessage(msg, this.sock);
                 if (transcript) {

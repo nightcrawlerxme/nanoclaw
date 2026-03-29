@@ -2,7 +2,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   buildSemanticMemoryContext,
@@ -127,5 +127,82 @@ Keep outreach short for warm prospects and focus on direct next steps.`,
     expect(context).toContain('Relevant semantic memory:');
     expect(context).toContain('government');
     expect(fs.readFileSync(filePath, 'utf-8')).toContain('<!-- memory-start:');
+  });
+
+  it('does not rewrite the global CLAUDE file during legacy bootstrap', async () => {
+    const globalPath = path.join(groupsDir, 'global', 'CLAUDE.md');
+    writeClaudeFile(
+      globalPath,
+      `# Global memory
+
+## Founder Direction
+
+WAIT-Agent-OS should preserve founder context and make NanoClaw and CrewOps work together cleanly.`,
+    );
+    writeClaudeFile(
+      path.join(groupsDir, 'team', 'CLAUDE.md'),
+      `# Team memory
+
+<!-- memory-start: team-note -->
+fitness: 0.5
+recency: 0
+frequency: 1
+tags:
+  - memory
+---
+Team-specific memory about project execution.
+<!-- memory-end: team-note -->
+`,
+    );
+
+    const before = fs.readFileSync(globalPath, 'utf-8');
+    const context = await buildSemanticMemoryContext(
+      'team',
+      'What is the founder direction for WAIT-Agent-OS?',
+      { groupsDir, embedTexts: fakeEmbedTexts, maxMatches: 2 },
+    );
+
+    expect(context).toContain('Relevant semantic memory:');
+    expect(fs.readFileSync(globalPath, 'utf-8')).toBe(before);
+  });
+
+  it('reuses persisted passage vectors when only memory metadata changes', async () => {
+    const embedTexts = vi.fn(fakeEmbedTexts);
+    writeClaudeFile(
+      path.join(groupsDir, 'team', 'CLAUDE.md'),
+      `# Team memory
+
+<!-- memory-start: gov-note -->
+fitness: 0.9
+recency: 0
+frequency: 3
+tags:
+  - government
+---
+Remember the government tender summary before drafting the bid response.
+<!-- memory-end: gov-note -->
+`,
+    );
+
+    await retrieveRelevantMemories(
+      'team',
+      'Find the best government tender memory',
+      { groupsDir, embedTexts, maxMatches: 2 },
+    );
+    await retrieveRelevantMemories(
+      'team',
+      'Find the best government tender memory again',
+      { groupsDir, embedTexts, maxMatches: 2 },
+    );
+
+    const passageCalls = embedTexts.mock.calls.filter(
+      ([, inputType]) => inputType === 'passage',
+    );
+    const queryCalls = embedTexts.mock.calls.filter(
+      ([, inputType]) => inputType === 'query',
+    );
+
+    expect(passageCalls).toHaveLength(1);
+    expect(queryCalls).toHaveLength(2);
   });
 });

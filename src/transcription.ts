@@ -1,5 +1,5 @@
 import { downloadMediaMessage } from '@whiskeysockets/baileys';
-import { WAMessage, WASocket } from '@whiskeysockets/baileys';
+import { WAMessage, WAMessageContent, WASocket } from '@whiskeysockets/baileys';
 
 import { readEnvFile } from './env.js';
 
@@ -93,7 +93,7 @@ export async function transcribeAudioMessage(
   }
 }
 
-export function isVoiceMessage(msg: WAMessage): boolean {
+export function isVoiceMessage(content: WAMessageContent | null | undefined): boolean {
   // ptt=true for voice notes (push-to-talk); skip regular audio file attachments
-  return !!msg.message?.audioMessage?.ptt;
+  return !!content?.audioMessage?.ptt;
 }

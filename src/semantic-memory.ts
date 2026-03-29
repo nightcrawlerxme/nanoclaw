@@ -17,6 +17,7 @@ import { logger } from './logger.js';
 
 const TABLE_NAME = 'blocks';
 const MAX_CONTEXT_MATCHES = 3;
+const INDEX_CACHE_FILE = 'memory-index-cache.json';
 
 export interface SemanticMemoryMatch {
   id: string;
@@ -46,6 +47,12 @@ interface MemorySource {
   blocks: MemoryBlock[];
 }
 
+interface IndexedMemoryCacheEntry {
+  id: string;
+  content: string;
+  vector: number[];
+}
+
 export interface SemanticMemoryOptions {
   groupsDir?: string;
   embedTexts?: (
@@ -59,6 +66,70 @@ function compact(text: string, limit = 280): string {
   const cleaned = text.replace(/\s+/g, ' ').trim();
   if (cleaned.length <= limit) return cleaned;
   return `${cleaned.slice(0, limit - 3).trimEnd()}...`;
+}
+
+function normalizeVector(value: unknown): number[] | null {
+  if (Array.isArray(value)) {
+    return value.every((item) => typeof item === 'number')
+      ? value
+      : null;
+  }
+  if (ArrayBuffer.isView(value)) {
+    return Array.from(value as unknown as Iterable<number>);
+  }
+  return null;
+}
+
+function indexCachePath(groupsDir: string, groupFolder: string): string {
+  return path.join(groupsDir, groupFolder, INDEX_CACHE_FILE);
+}
+
+function loadIndexCache(
+  groupsDir: string,
+  groupFolder: string,
+): Map<string, IndexedMemoryCacheEntry> {
+  const cachePath = indexCachePath(groupsDir, groupFolder);
+  try {
+    if (!fs.existsSync(cachePath)) return new Map();
+    const parsed = JSON.parse(fs.readFileSync(cachePath, 'utf-8')) as {
+      rows?: IndexedMemoryCacheEntry[];
+    };
+    const entries = Array.isArray(parsed.rows) ? parsed.rows : [];
+    return new Map(
+      entries
+        .map((entry) => {
+          const vector = normalizeVector(entry.vector);
+          if (!entry?.id || typeof entry.content !== 'string' || !vector) {
+            return null;
+          }
+          return [entry.id, { id: entry.id, content: entry.content, vector }] as const;
+        })
+        .filter((entry): entry is readonly [string, IndexedMemoryCacheEntry] => entry !== null),
+    );
+  } catch (err) {
+    logger.warn({ groupFolder, err }, 'Failed to load semantic memory index cache');
+    return new Map();
+  }
+}
+
+function saveIndexCache(
+  groupsDir: string,
+  groupFolder: string,
+  rows: IndexedMemoryRow[],
+): void {
+  const cachePath = indexCachePath(groupsDir, groupFolder);
+  const cacheRows = rows
+    .map((row) => {
+      const vector = normalizeVector(row.vector);
+      if (!vector) return null;
+      return {
+        id: row.id,
+        content: row.content,
+        vector,
+      } satisfies IndexedMemoryCacheEntry;
+    })
+    .filter((row): row is IndexedMemoryCacheEntry => row !== null);
+  fs.writeFileSync(cachePath, JSON.stringify({ rows: cacheRows }));
 }
 
 function memoryFilePath(baseDir: string, folder: string): string {
@@ -148,12 +219,15 @@ function loadAndBootstrapMemorySource(
         blocks: bootstrappedBlocks,
       };
       const scored = scoreAllMemories(parsed);
-      fs.writeFileSync(sourcePath, serializeMemoryFile(scored));
+      if (sourceKind === 'group') {
+        fs.writeFileSync(sourcePath, serializeMemoryFile(scored));
+      }
       logger.info(
         {
           sourcePath,
           sourceKind,
           blocks: scored.blocks.length,
+          persisted: sourceKind === 'group',
         },
         'Bootstrapped legacy CLAUDE memory into structured blocks',
       );
@@ -265,16 +339,17 @@ async function persistSources(
   ) => Promise<number[][]>,
   groupsDir: string,
 ): Promise<void> {
+  const dbPath = path.join(groupsDir, groupFolder, 'memory.lance');
+  fs.mkdirSync(dbPath, { recursive: true });
+  const db = await lancedb.connect(dbPath);
+  let table = await openTable(groupsDir, groupFolder);
+  const existingRows = loadIndexCache(groupsDir, groupFolder);
+
   const rows: IndexedMemoryRow[] = [];
+  const pendingEmbeddings: Array<{ row: IndexedMemoryRow; content: string }> = [];
   for (const source of sources) {
-    const embeddings = await embedTexts(
-      source.blocks.map((block) => block.content),
-      'passage',
-    );
-    for (const [index, block] of source.blocks.entries()) {
-      const vector = embeddings[index];
-      if (!vector) continue;
-      rows.push({
+    for (const block of source.blocks) {
+      const row: IndexedMemoryRow = {
         id: `${source.sourceKind}:${block.id}`,
         sourcePath: source.sourcePath,
         sourceKind: source.sourceKind,
@@ -282,22 +357,40 @@ async function persistSources(
         tagsText: block.tags.join(','),
         fitness: block.fitness,
         lastAccessedAt: block.last_accessed_at,
-        vector,
-      });
+        vector: [],
+      };
+      const existing = existingRows.get(row.id);
+      const existingVector = normalizeVector(existing?.vector);
+      if (existing?.content === row.content && existingVector) {
+        row.vector = existingVector;
+        rows.push(row);
+      } else {
+        pendingEmbeddings.push({ row, content: block.content });
+      }
+    }
+  }
+
+  if (pendingEmbeddings.length > 0) {
+    const embeddings = await embedTexts(
+      pendingEmbeddings.map((entry) => entry.content),
+      'passage',
+    );
+    for (const [index, entry] of pendingEmbeddings.entries()) {
+      const vector = embeddings[index];
+      if (!vector) continue;
+      entry.row.vector = vector;
+      rows.push(entry.row);
     }
   }
 
   if (rows.length === 0) return;
 
-  const dbPath = path.join(groupsDir, groupFolder, 'memory.lance');
-  fs.mkdirSync(dbPath, { recursive: true });
-  const db = await lancedb.connect(dbPath);
-  let table = await openTable(groupsDir, groupFolder);
   if (!table) {
     await db.createTable(
       TABLE_NAME,
       rows as unknown as Record<string, unknown>[],
     );
+    saveIndexCache(groupsDir, groupFolder, rows);
     return;
   }
   try {
@@ -306,14 +399,19 @@ async function persistSources(
     // Fresh table with no rows may reject broad deletes on some versions.
   }
   await table.add(rows as unknown as Record<string, unknown>[]);
+  saveIndexCache(groupsDir, groupFolder, rows);
 }
 
 async function touchMatchedBlocks(
   matches: SemanticMemoryMatch[],
   groupsDir: string,
 ): Promise<void> {
+  const globalMemoryPath = memoryFilePath(groupsDir, 'global');
   const byPath = new Map<string, Set<string>>();
   for (const match of matches) {
+    if (match.sourcePath === globalMemoryPath || match.sourceKind === 'global') {
+      continue;
+    }
     const blockId = match.id.includes(':')
       ? match.id.split(':', 2)[1]
       : match.id;
