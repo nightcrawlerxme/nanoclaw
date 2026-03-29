@@ -34,7 +34,7 @@ interface IndexedMemoryRow {
   sourcePath: string;
   sourceKind: string;
   content: string;
-  tags: string[];
+  tagsText: string;
   fitness: number;
   lastAccessedAt: string;
   vector: number[];
@@ -65,6 +65,115 @@ function memoryFilePath(baseDir: string, folder: string): string {
   return path.join(baseDir, folder, 'CLAUDE.md');
 }
 
+function slugify(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48);
+}
+
+function inferTags(title: string, content: string): string[] {
+  const haystack = `${title} ${content}`.toLowerCase();
+  const tags = new Set<string>();
+  const keywordGroups: Array<[string, RegExp]> = [
+    ['government', /\b(government|tender|procurement|canadabuys|proposal)\b/],
+    ['sales', /\b(sales|prospect|outreach|lead|proposal)\b/],
+    ['marketing', /\b(marketing|seo|campaign|brand|social media)\b/],
+    ['hr', /\b(hiring|hr|candidate|job search|contractor)\b/],
+    ['tech', /\b(code|github|api|build|deploy|debug|agent-s)\b/],
+    ['operations', /\b(dispatch|status|restart|service|task|health)\b/],
+    ['memory', /\b(memory|context|history|recall)\b/],
+  ];
+
+  for (const [tag, pattern] of keywordGroups) {
+    if (pattern.test(haystack)) tags.add(tag);
+  }
+
+  return [...tags];
+}
+
+function bootstrapLegacyMemory(
+  raw: string,
+  sourceKind: 'group' | 'global',
+): MemoryBlock[] {
+  const sections = raw
+    .split(/\n(?=# )|\n(?=## )|\n(?=### )/g)
+    .map((section) => section.trim())
+    .filter(Boolean);
+  const now = new Date().toISOString();
+  const blocks: MemoryBlock[] = [];
+
+  for (const [index, section] of sections.entries()) {
+    const lines = section.split('\n').map((line) => line.trimEnd());
+    const heading = lines[0]?.match(/^#{1,6}\s+(.*)$/)?.[1]?.trim() || '';
+    const body = lines
+      .slice(heading ? 1 : 0)
+      .join('\n')
+      .replace(/```[\s\S]*?```/g, '')
+      .replace(/`[^`]+`/g, '')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+
+    if (body.length < 80) continue;
+
+    const title = heading || `legacy-${index + 1}`;
+    blocks.push({
+      id: `${sourceKind}-${slugify(title) || `legacy-${index + 1}`}`,
+      content: body,
+      fitness: 0.35,
+      recency: 0,
+      frequency: 1,
+      tags: inferTags(title, body),
+      created_at: now,
+      last_accessed_at: now,
+    });
+  }
+
+  return blocks.slice(0, 8);
+}
+
+function loadAndBootstrapMemorySource(
+  sourcePath: string,
+  sourceKind: 'group' | 'global',
+): MemorySource | null {
+  const raw = fs.readFileSync(sourcePath, 'utf-8');
+  let parsed = parseMemoryFile(raw);
+
+  if (parsed.blocks.length === 0 && parsed.prose.trim().length > 0) {
+    const bootstrappedBlocks = bootstrapLegacyMemory(parsed.prose, sourceKind);
+    if (bootstrappedBlocks.length > 0) {
+      parsed = {
+        ...parsed,
+        blocks: bootstrappedBlocks,
+      };
+      const scored = scoreAllMemories(parsed);
+      fs.writeFileSync(sourcePath, serializeMemoryFile(scored));
+      logger.info(
+        {
+          sourcePath,
+          sourceKind,
+          blocks: scored.blocks.length,
+        },
+        'Bootstrapped legacy CLAUDE memory into structured blocks',
+      );
+      return {
+        sourceKind,
+        sourcePath,
+        blocks: scored.blocks,
+      };
+    }
+  }
+
+  const scored = scoreAllMemories(parsed);
+  if (scored.blocks.length === 0) return null;
+  return {
+    sourceKind,
+    sourcePath,
+    blocks: scored.blocks,
+  };
+}
+
 function loadMemorySources(
   groupFolder: string,
   groupsDir: string,
@@ -87,14 +196,12 @@ function loadMemorySources(
   for (const candidate of candidates) {
     if (!fs.existsSync(candidate.sourcePath)) continue;
     try {
-      const raw = fs.readFileSync(candidate.sourcePath, 'utf-8');
-      const scored = scoreAllMemories(parseMemoryFile(raw));
-      if (scored.blocks.length === 0) continue;
-      sources.push({
-        sourceKind: candidate.sourceKind,
-        sourcePath: candidate.sourcePath,
-        blocks: scored.blocks,
-      });
+      const source = loadAndBootstrapMemorySource(
+        candidate.sourcePath,
+        candidate.sourceKind,
+      );
+      if (!source) continue;
+      sources.push(source);
     } catch (err) {
       logger.warn(
         { groupFolder, sourcePath: candidate.sourcePath, err },
@@ -132,10 +239,8 @@ async function buildDefaultEmbedder(
   )({
     input: texts,
     model: 'nvidia/nv-embedqa-e5-v5',
-    extra_body: {
-      input_type: inputType,
-      truncate: 'END',
-    },
+    input_type: inputType,
+    truncate: 'END',
   });
   return response.data.map((item) => item.embedding);
 }
@@ -174,7 +279,7 @@ async function persistSources(
         sourcePath: source.sourcePath,
         sourceKind: source.sourceKind,
         content: block.content,
-        tags: block.tags,
+        tagsText: block.tags.join(','),
         fitness: block.fitness,
         lastAccessedAt: block.last_accessed_at,
         vector,
@@ -270,7 +375,13 @@ export async function retrieveRelevantMemories(
         sourcePath: row.sourcePath,
         sourceKind: row.sourceKind === 'global' ? 'global' : 'group',
         content: row.content,
-        tags: Array.isArray(row.tags) ? row.tags : [],
+        tags:
+          typeof row.tagsText === 'string' && row.tagsText.length > 0
+            ? row.tagsText
+                .split(',')
+                .map((tag) => tag.trim())
+                .filter(Boolean)
+            : [],
         fitness,
         semanticScore,
         combinedScore,

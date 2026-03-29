@@ -102,4 +102,30 @@ Recall the prior architecture decision about semantic memory and LanceDB.
     expect(context).toContain('mem-1');
     expect(context).toContain('LanceDB');
   });
+
+  it('bootstraps legacy prose-only CLAUDE files into retrievable memory blocks', async () => {
+    const filePath = path.join(groupsDir, 'legacy', 'CLAUDE.md');
+    writeClaudeFile(
+      filePath,
+      `# Panda
+
+## Government Tender Notes
+
+Joseph wants government tender follow-up to emphasize compliance, delivery risk, proposal timelines, and procurement fit.
+
+## Sales Direction
+
+Keep outreach short for warm prospects and focus on direct next steps.`,
+    );
+
+    const context = await buildSemanticMemoryContext(
+      'legacy',
+      'Need the government tender follow-up guidance',
+      { groupsDir, embedTexts: fakeEmbedTexts, maxMatches: 2 },
+    );
+
+    expect(context).toContain('Relevant semantic memory:');
+    expect(context).toContain('government');
+    expect(fs.readFileSync(filePath, 'utf-8')).toContain('<!-- memory-start:');
+  });
 });
