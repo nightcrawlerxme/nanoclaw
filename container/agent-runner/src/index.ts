@@ -117,6 +117,16 @@ function log(message: string): void {
   console.error(`[agent-runner] ${message}`);
 }
 
+function stripWrappingQuotes(value: string): string {
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    return value.slice(1, -1);
+  }
+  return value;
+}
+
 function loadOutlookEnvFromMountedFile(): Record<string, string> {
   const outlookEnvPath = '/home/node/.outlook-mcp/.env';
   try {
@@ -128,7 +138,7 @@ function loadOutlookEnvFromMountedFile(): Record<string, string> {
         /^(MS_TENANT_ID|MS_CLIENT_ID|MS_CLIENT_SECRET)=(.+)$/,
       );
       if (match) {
-        result[match[1]] = match[2].trim();
+        result[match[1]] = stripWrappingQuotes(match[2].trim());
       }
     }
     return result;
