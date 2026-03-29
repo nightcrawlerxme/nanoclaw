@@ -225,12 +225,14 @@ export function getWebhookChannel(): WebhookChannel | null {
 
 registerChannel('webhook', (opts: ChannelOpts) => {
   const envVars = readEnvFile([
-    'WEBHOOK_PORT',
+    'WEBHOOK_CHANNEL_PORT',
     'WEBHOOK_LINKED_JID',
     'WEBHOOK_SECRET',
   ]);
   const port = parseInt(
-    process.env.WEBHOOK_PORT || envVars.WEBHOOK_PORT || String(DEFAULT_PORT),
+    process.env.WEBHOOK_CHANNEL_PORT ||
+      envVars.WEBHOOK_CHANNEL_PORT ||
+      String(DEFAULT_PORT),
     10,
   );
   const linkedJid =
