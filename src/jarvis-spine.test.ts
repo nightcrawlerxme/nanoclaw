@@ -43,7 +43,10 @@ describe('jarvis spine', () => {
     expect(id).toContain('evt_');
     expect(listJarvisEvents()).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ event_id: id, event_type: 'conversation_signal' }),
+        expect.objectContaining({
+          event_id: id,
+          event_type: 'conversation_signal',
+        }),
       ]),
     );
   });

@@ -792,7 +792,9 @@ export function logTaskRun(log: TaskRunLog): void {
     source_key: `task_run:${log.task_id}:${log.run_at}:${log.status}`,
     event_type: 'task_outcome',
     occurred_at: log.run_at,
-    entity_refs: resolveJarvisEntities(`${log.result || ''} ${log.error || ''}`),
+    entity_refs: resolveJarvisEntities(
+      `${log.result || ''} ${log.error || ''}`,
+    ),
     payload: {
       task_id: log.task_id,
       duration_ms: log.duration_ms,

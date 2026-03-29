@@ -135,10 +135,15 @@ export function upsertJarvisEntity(entity: {
     );
 }
 
-export function listJarvisEvents(): Array<{ event_id: string; event_type: string }> {
+export function listJarvisEvents(): Array<{
+  event_id: string;
+  event_type: string;
+}> {
   const database = getDb();
   return database
-    .prepare(`SELECT event_id, event_type FROM jarvis_events ORDER BY occurred_at DESC`)
+    .prepare(
+      `SELECT event_id, event_type FROM jarvis_events ORDER BY occurred_at DESC`,
+    )
     .all() as Array<{ event_id: string; event_type: string }>;
 }
 
