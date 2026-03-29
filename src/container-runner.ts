@@ -64,7 +64,9 @@ export function injectOutlookEnvVars(args: string[]): void {
   try {
     const envContent = fs.readFileSync(outlookEnvPath, 'utf-8');
     for (const line of envContent.split('\n')) {
-      const match = line.match(/^(MS_TENANT_ID|MS_CLIENT_ID|MS_CLIENT_SECRET)=(.+)$/);
+      const match = line.match(
+        /^(MS_TENANT_ID|MS_CLIENT_ID|MS_CLIENT_SECRET)=(.+)$/,
+      );
       if (match) {
         args.push('-e', `${match[1]}=${match[2].trim()}`);
       }

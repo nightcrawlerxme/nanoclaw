@@ -24,10 +24,16 @@ describe('readEnvFile', () => {
   });
 
   it('does not fall back to the parent .env unless explicitly enabled', () => {
-    const parentDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nanoclaw-parent-'));
+    const parentDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'nanoclaw-parent-'),
+    );
     const childDir = path.join(parentDir, 'child');
     fs.mkdirSync(childDir);
-    fs.writeFileSync(path.join(parentDir, '.env'), 'TEST_KEY=parent\n', 'utf-8');
+    fs.writeFileSync(
+      path.join(parentDir, '.env'),
+      'TEST_KEY=parent\n',
+      'utf-8',
+    );
     process.chdir(childDir);
 
     expect(readEnvFile(['TEST_KEY'])).toEqual({});

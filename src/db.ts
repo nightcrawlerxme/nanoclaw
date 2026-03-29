@@ -42,7 +42,9 @@ function resolveJarvisEntities(text: string): string[] {
   return [...refs];
 }
 
-function safeUpsertJarvisEntity(params: Parameters<typeof upsertJarvisEntity>[0]) {
+function safeUpsertJarvisEntity(
+  params: Parameters<typeof upsertJarvisEntity>[0],
+) {
   try {
     upsertJarvisEntity(params);
   } catch (err) {
@@ -50,7 +52,9 @@ function safeUpsertJarvisEntity(params: Parameters<typeof upsertJarvisEntity>[0]
   }
 }
 
-function safeUpsertJarvisEvent(params: Parameters<typeof upsertJarvisEvent>[0]) {
+function safeUpsertJarvisEvent(
+  params: Parameters<typeof upsertJarvisEvent>[0],
+) {
   try {
     upsertJarvisEvent(params);
   } catch (err) {

@@ -105,12 +105,13 @@ function consumeNonce(nonce: string, command: string): boolean {
 }
 
 // Periodic cleanup of expired nonces
-setInterval(() => {
+const cleanupTimer = setInterval(() => {
   const now = Date.now();
   for (const [key, entry] of pendingNonces) {
     if (now > entry.expiresAt) pendingNonces.delete(key);
   }
 }, 60_000);
+cleanupTimer.unref();
 
 // --- Operation classification ---
 
