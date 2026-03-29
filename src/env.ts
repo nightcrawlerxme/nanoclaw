@@ -51,7 +51,7 @@ export function readEnvFile(keys: string[]): Record<string, string> {
       ) {
         value = value.slice(1, -1);
       }
-      if (value) result[key] = value;
+      if (value && !(key in result)) result[key] = value;
     }
   }
 
