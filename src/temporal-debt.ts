@@ -19,7 +19,8 @@ export function addDebt(
 ): void {
   const db = getDb();
   const id =
-    item.id || 'debt-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+    item.id ||
+    'debt-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
   db.prepare(
     `INSERT INTO temporal_debt
       (id, group_folder, chat_jid, description, created_at, resolved_at, score, last_escalated_at, escalation_count, source_message_id)
@@ -38,7 +39,10 @@ export function addDebt(
 export function resolveDebt(id: string): void {
   const db = getDb();
   const now = new Date().toISOString();
-  db.prepare(`UPDATE temporal_debt SET resolved_at = ? WHERE id = ?`).run(now, id);
+  db.prepare(`UPDATE temporal_debt SET resolved_at = ? WHERE id = ?`).run(
+    now,
+    id,
+  );
 }
 
 export function getUnresolvedDebt(groupFolder: string): DebtItem[] {
@@ -69,16 +73,17 @@ export function updateDebtScores(): void {
   const allUnresolved = db
     .prepare(`SELECT * FROM temporal_debt WHERE resolved_at IS NULL`)
     .all() as DebtItem[];
-  const update = db.prepare(
-    `UPDATE temporal_debt SET score = ? WHERE id = ?`,
-  );
+  const update = db.prepare(`UPDATE temporal_debt SET score = ? WHERE id = ?`);
   for (const item of allUnresolved) {
     const score = computeDebtScore(item);
     update.run(score, item.id);
   }
 }
 
-export function getHighDebtItems(threshold: number, limit?: number): DebtItem[] {
+export function getHighDebtItems(
+  threshold: number,
+  limit?: number,
+): DebtItem[] {
   const db = getDb();
   if (limit !== undefined) {
     return db
@@ -150,7 +155,8 @@ export function startDebtMonitorLoop(
     setTimeout(loop, pollIntervalMs);
   };
 
-  loop();
+  // Delay first run so the system is fully initialized before sending alerts
+  setTimeout(loop, pollIntervalMs);
 }
 
 /** @internal - for tests only. */

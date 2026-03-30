@@ -88,6 +88,8 @@ vi.mock('child_process', async () => {
 
 import { runContainerAgent, ContainerOutput } from './container-runner.js';
 import type { RegisteredGroup } from './types.js';
+import { spawn } from 'child_process';
+import fs from 'fs';
 
 const testGroup: RegisteredGroup = {
   name: 'Test Group',
@@ -208,3 +210,43 @@ describe('container-runner timeout behavior', () => {
     expect(result.newSessionId).toBe('session-456');
   });
 });
+
+describe('container-runner credential mount boundaries', () => {
+  beforeEach(() => {
+    fakeProc = createFakeProcess();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('does not mount Outlook or GWS credentials for non-main groups', async () => {
+    vi.mocked(fs.existsSync).mockImplementation((target: fs.PathLike) => {
+      const value = String(target);
+      return (
+        value.includes('.outlook-mcp') ||
+        value.includes('.outlook-mcp-tokens.json') ||
+        value.includes(`${pathSeparator()}.config${pathSeparator()}gws`) ||
+        value.includes('settings.json') ||
+        value.includes('/tmp/nanoclaw-test-groups') ||
+        value.includes('/tmp/nanoclaw-test-data')
+      );
+    });
+
+    const resultPromise = runContainerAgent(testGroup, testInput, () => {});
+    fakeProc.emit('close', 0);
+    await vi.advanceTimersByTimeAsync(10);
+    await resultPromise;
+
+    const spawnArgs = vi.mocked(spawn).mock.calls.at(-1)?.[1] as string[];
+    const joined = spawnArgs.join(' ');
+    expect(joined).not.toContain('/home/node/.outlook-mcp');
+    expect(joined).not.toContain('/home/node/.outlook-mcp-tokens.json');
+    expect(joined).not.toContain('/home/node/.config/gws');
+  });
+});
+
+function pathSeparator(): string {
+  return process.platform === 'win32' ? '\\' : '/';
+}

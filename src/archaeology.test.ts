@@ -166,7 +166,9 @@ describe('archaeology', () => {
 
     // chat_jid must be the real registered JID, not a fabricated string
     const fullTasks = db
-      .prepare("SELECT id, chat_jid FROM scheduled_tasks WHERE id LIKE 'archaeology-%'")
+      .prepare(
+        "SELECT id, chat_jid FROM scheduled_tasks WHERE id LIKE 'archaeology-%'",
+      )
       .all() as { id: string; chat_jid: string }[];
     const jidMap = Object.fromEntries(fullTasks.map((t) => [t.id, t.chat_jid]));
     expect(jidMap['archaeology-alpha']).toBe('111@g.us');

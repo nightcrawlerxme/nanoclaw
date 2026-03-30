@@ -4,6 +4,7 @@ import path from 'path';
 
 import { ASSISTANT_NAME, DATA_DIR, STORE_DIR } from './config.js';
 import { isValidGroupFolder } from './group-folder.js';
+import { upsertJarvisEntity, upsertJarvisEvent } from './jarvis-spine.js';
 import { logger } from './logger.js';
 import {
   NewMessage,
@@ -13,6 +14,53 @@ import {
 } from './types.js';
 
 let db: Database.Database;
+
+function resolveJarvisEntities(text: string): string[] {
+  const lowered = text.toLowerCase();
+  const refs = new Set<string>();
+  if (
+    lowered.includes('joseph') ||
+    lowered.includes('joe') ||
+    lowered.includes('founder')
+  ) {
+    refs.add('entity_person_joseph');
+  }
+  if (lowered.includes('crewops') || lowered.includes('crew ops')) {
+    refs.add('entity_project_crewops');
+  }
+  if (lowered.includes('nanoclaw') || lowered.includes('nano claw')) {
+    refs.add('entity_project_nanoclaw');
+  }
+  if (
+    lowered.includes('wait-agent-os') ||
+    lowered.includes('wait agent os') ||
+    lowered.includes('wait-tech') ||
+    lowered.includes('wait tech')
+  ) {
+    refs.add('entity_project_wait_agent_os');
+  }
+  return [...refs];
+}
+
+function safeUpsertJarvisEntity(
+  params: Parameters<typeof upsertJarvisEntity>[0],
+) {
+  try {
+    upsertJarvisEntity(params);
+  } catch (err) {
+    logger.warn({ err }, 'Failed to upsert jarvis entity (non-fatal)');
+  }
+}
+
+function safeUpsertJarvisEvent(
+  params: Parameters<typeof upsertJarvisEvent>[0],
+) {
+  try {
+    upsertJarvisEvent(params);
+  } catch (err) {
+    logger.warn({ err }, 'Failed to write jarvis event (non-fatal)');
+  }
+}
 
 /** @internal - exposes the raw database handle for feature modules. */
 export function getDb(): Database.Database {
@@ -428,6 +476,17 @@ export function storeChatMetadata(
     `,
     ).run(chatJid, chatJid, timestamp, ch, group);
   }
+
+  if (isGroup && name) {
+    safeUpsertJarvisEntity({
+      entity_id: `entity_group_${chatJid.replace(/[^a-zA-Z0-9]+/g, '_')}`,
+      entity_type: 'conversation',
+      name,
+      aliases: [chatJid],
+      metadata: { channel: ch || 'unknown' },
+      updated_at: timestamp,
+    });
+  }
 }
 
 /**
@@ -505,6 +564,27 @@ export function storeMessage(msg: NewMessage): void {
     msg.is_from_me ? 1 : 0,
     msg.is_bot_message ? 1 : 0,
   );
+
+  if (!msg.is_bot_message && (msg.content || '').trim().length > 0) {
+    safeUpsertJarvisEvent({
+      source: 'nanoclaw',
+      source_key: `message:${msg.chat_jid}:${msg.id}`,
+      event_type: 'conversation_signal',
+      occurred_at: msg.timestamp,
+      entity_refs: resolveJarvisEntities(
+        `${msg.sender_name} ${msg.content} ${msg.chat_jid}`,
+      ),
+      payload: {
+        chat_jid: msg.chat_jid,
+        sender: msg.sender,
+        sender_name: msg.sender_name,
+        text: msg.content.slice(0, 600),
+        is_from_me: msg.is_from_me ?? false,
+      },
+      privacy_class: 'private',
+      confidence: 0.82,
+    });
+  }
 }
 
 /**
@@ -726,6 +806,25 @@ export function logTaskRun(log: TaskRunLog): void {
     log.result,
     log.error,
   );
+
+  safeUpsertJarvisEvent({
+    source: 'nanoclaw_scheduler',
+    source_key: `task_run:${log.task_id}:${log.run_at}:${log.status}`,
+    event_type: 'task_outcome',
+    occurred_at: log.run_at,
+    entity_refs: resolveJarvisEntities(
+      `${log.result || ''} ${log.error || ''}`,
+    ),
+    payload: {
+      task_id: log.task_id,
+      duration_ms: log.duration_ms,
+      status: log.status,
+      result_preview: (log.result || '').slice(0, 500),
+      error: log.error,
+    },
+    privacy_class: 'private',
+    confidence: log.status === 'success' ? 0.86 : 0.78,
+  });
 }
 
 // --- Router state accessors ---
@@ -848,6 +947,19 @@ export function setRegisteredGroup(jid: string, group: RegisteredGroup): void {
     group.shadowMode ? 1 : 0,
     group.shadowActivationThreshold ?? 10,
   );
+
+  safeUpsertJarvisEntity({
+    entity_id: `entity_group_${jid.replace(/[^a-zA-Z0-9]+/g, '_')}`,
+    entity_type: 'conversation',
+    name: group.name,
+    aliases: [jid, group.folder],
+    metadata: {
+      folder: group.folder,
+      requiresTrigger: group.requiresTrigger !== false,
+      isMain: group.isMain === true,
+    },
+    updated_at: group.added_at,
+  });
 }
 
 export function getAllRegisteredGroups(): Record<string, RegisteredGroup> {

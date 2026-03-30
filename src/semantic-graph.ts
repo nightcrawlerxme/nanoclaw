@@ -181,5 +181,7 @@ export function getGraphContextSummary(
     .sort((a, b) => b.weight - a.weight)
     .slice(0, topN);
 
-  return 'Key concepts: ' + top.map((n) => `${n.label}(${n.weight})`).join(', ');
+  return (
+    'Key concepts: ' + top.map((n) => `${n.label}(${n.weight})`).join(', ')
+  );
 }

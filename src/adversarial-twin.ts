@@ -27,7 +27,11 @@ export interface AdversarialTranscript {
  * Returns { enabled: false } if the config file is missing or malformed.
  */
 export function getTwinConfig(groupFolder: string): TwinConfig {
-  const configPath = path.join(GROUPS_DIR, groupFolder, 'adversarial-twin.json');
+  const configPath = path.join(
+    GROUPS_DIR,
+    groupFolder,
+    'adversarial-twin.json',
+  );
   try {
     if (!fs.existsSync(configPath)) {
       return { enabled: false, minPromptLength: 200 };
@@ -114,7 +118,14 @@ export function saveAdversarialTranscript(
          (group_folder, original_prompt, main_response, rebuttal, final_response, created_at)
        VALUES (?, ?, ?, ?, ?, ?)`,
     )
-    .run(groupFolder, originalPrompt, mainResponse, rebuttal, finalResponse, now);
+    .run(
+      groupFolder,
+      originalPrompt,
+      mainResponse,
+      rebuttal,
+      finalResponse,
+      now,
+    );
   return result.lastInsertRowid as number;
 }
 
@@ -172,7 +183,11 @@ export async function runAdversarialTwin(
   const minLength = config.minPromptLength ?? 200;
   if (originalPrompt.length < minLength) {
     logger.debug(
-      { groupFolder: group.folder, promptLength: originalPrompt.length, minLength },
+      {
+        groupFolder: group.folder,
+        promptLength: originalPrompt.length,
+        minLength,
+      },
       'Prompt too short for adversarial twin, skipping',
     );
     return null;
@@ -184,7 +199,13 @@ export async function runAdversarialTwin(
   );
 
   // Save a stub transcript — actual container integration is in index.ts
-  saveAdversarialTranscript(group.folder, originalPrompt, mainResponse, null, null);
+  saveAdversarialTranscript(
+    group.folder,
+    originalPrompt,
+    mainResponse,
+    null,
+    null,
+  );
 
   return null;
 }

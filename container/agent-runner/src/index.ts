@@ -117,6 +117,36 @@ function log(message: string): void {
   console.error(`[agent-runner] ${message}`);
 }
 
+function stripWrappingQuotes(value: string): string {
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    return value.slice(1, -1);
+  }
+  return value;
+}
+
+function loadOutlookEnvFromMountedFile(): Record<string, string> {
+  const outlookEnvPath = '/home/node/.outlook-mcp/.env';
+  try {
+    if (!fs.existsSync(outlookEnvPath)) return {};
+    const envContent = fs.readFileSync(outlookEnvPath, 'utf-8');
+    const result: Record<string, string> = {};
+    for (const line of envContent.split('\n')) {
+      const match = line.match(
+        /^(MS_TENANT_ID|MS_CLIENT_ID|MS_CLIENT_SECRET)=(.+)$/,
+      );
+      if (match) {
+        result[match[1]] = stripWrappingQuotes(match[2].trim());
+      }
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
+
 function getSessionSummary(sessionId: string, transcriptPath: string): string | null {
   const projectDir = path.dirname(transcriptPath);
   const indexPath = path.join(projectDir, 'sessions-index.json');
@@ -388,6 +418,7 @@ async function runQuery(
   if (extraDirs.length > 0) {
     log(`Additional directories: ${extraDirs.join(', ')}`);
   }
+  const outlookEnv = loadOutlookEnvFromMountedFile();
 
   for await (const message of query({
     prompt: stream,
@@ -407,7 +438,9 @@ async function runQuery(
         'TeamCreate', 'TeamDelete', 'SendMessage',
         'TodoWrite', 'ToolSearch', 'Skill',
         'NotebookEdit',
-        'mcp__nanoclaw__*'
+        'mcp__nanoclaw__*',
+        'mcp__gws__*',
+        'mcp__outlook__*',
       ],
       env: sdkEnv,
       permissionMode: 'bypassPermissions',
@@ -423,6 +456,36 @@ async function runQuery(
             NANOCLAW_IS_MAIN: containerInput.isMain ? '1' : '0',
           },
         },
+        // Only register gws when credentials are mounted
+        ...(fs.existsSync('/home/node/.config/gws')
+          ? {
+              gws: {
+                command: 'node',
+                args: [path.join(path.dirname(mcpServerPath), 'gws-mcp-stdio.js')],
+                env: {
+                  NANOCLAW_CHAT_JID: containerInput.chatJid,
+                  NANOCLAW_GROUP_FOLDER: containerInput.groupFolder,
+                },
+              },
+            }
+          : {}),
+        // Only register outlook when credentials are mounted inside the container
+        ...(outlookEnv.MS_CLIENT_ID
+          ? {
+              outlook: {
+                command: 'npx',
+                args: ['-y', 'outlook-mcp'],
+                env: {
+                  MS_CLIENT_ID: outlookEnv.MS_CLIENT_ID,
+                  MS_CLIENT_SECRET: outlookEnv.MS_CLIENT_SECRET || '',
+                  ...(outlookEnv.MS_TENANT_ID
+                    ? { MS_TENANT_ID: outlookEnv.MS_TENANT_ID }
+                    : {}),
+                  HOME: '/home/node',
+                },
+              },
+            }
+          : {}),
       },
       hooks: {
         PreCompact: [{ hooks: [createPreCompactHook(containerInput.assistantName)] }],

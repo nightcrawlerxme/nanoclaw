@@ -49,6 +49,7 @@ import {
 import { GroupQueue } from './group-queue.js';
 import { resolveGroupFolderPath } from './group-folder.js';
 import { startIpcWatcher } from './ipc.js';
+import { registerPaperclipRoute } from './plugins/paperclip.js';
 import { findChannel, formatMessages, formatOutbound } from './router.js';
 import {
   restoreRemoteControl,
@@ -65,6 +66,7 @@ import { startSchedulerLoop } from './task-scheduler.js';
 import { startDebtMonitorLoop } from './temporal-debt.js';
 import { startLifecycleMonitorLoop } from './task-lifecycle.js';
 import { startWhisperDecayLoop, injectWhisperContext } from './whispers.js';
+import { buildSemanticMemoryContext } from './semantic-memory.js';
 import { scheduleCircadianTask } from './circadian.js';
 import { scheduleEmergenceTask } from './emergence.js';
 import { scheduleUncertaintyReport } from './uncertainty.js';
@@ -212,7 +214,14 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
   }
 
   const rawPrompt = formatMessages(missedMessages, TIMEZONE);
-  const prompt = injectWhisperContext(group.folder, rawPrompt);
+  const semanticMemory = await buildSemanticMemoryContext(
+    group.folder,
+    rawPrompt,
+  );
+  const promptCore = injectWhisperContext(group.folder, rawPrompt);
+  const prompt = semanticMemory
+    ? `${semanticMemory}\n\n${promptCore}`
+    : promptCore;
 
   // Advance cursor so the piping path in startMessageLoop won't re-fetch
   // these messages. Save the old cursor so we can roll back on error.
@@ -737,6 +746,19 @@ async function main(): Promise<void> {
     logger.fatal('No channels connected');
     process.exit(1);
   }
+
+  // Wire up sibling channels for cross-channel forwarding (e.g., webhook → telegram)
+  for (const ch of channels) {
+    if (
+      'setSiblingChannels' in ch &&
+      typeof ch.setSiblingChannels === 'function'
+    ) {
+      (ch as any).setSiblingChannels(channels);
+    }
+  }
+
+  // Register webhook plugins (must be after channels connect)
+  registerPaperclipRoute();
 
   // Start subsystems (independently of connection handler)
   startSchedulerLoop({
