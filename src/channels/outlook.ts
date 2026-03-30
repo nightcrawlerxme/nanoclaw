@@ -28,7 +28,7 @@ interface ThreadMeta {
   conversationId: string;
 }
 
-const SCOPES = ['Mail.Read', 'Mail.Send', 'User.Read'];
+const SCOPES = ['Mail.Read', 'Mail.Send', 'User.Read', 'offline_access'];
 const CRED_DIR = path.join(os.homedir(), '.outlook-mcp');
 const CACHE_PATH = path.join(CRED_DIR, 'msal-cache.json');
 
