@@ -20,6 +20,17 @@ const chatJid = process.env.NANOCLAW_CHAT_JID!;
 const groupFolder = process.env.NANOCLAW_GROUP_FOLDER!;
 const isMain = process.env.NANOCLAW_IS_MAIN === '1';
 
+type TaskSnapshotRow = {
+  id: string;
+  prompt: string;
+  schedule_type: string;
+  schedule_value: string;
+  status: string;
+  next_run: string | null;
+  groupFolder?: string;
+  group_folder?: string;
+};
+
 function writeIpcFile(dir: string, data: object): string {
   fs.mkdirSync(dir, { recursive: true });
 
@@ -176,7 +187,7 @@ server.tool(
 
       const formatted = tasks
         .map(
-          (t: { id: string; prompt: string; schedule_type: string; schedule_value: string; status: string; next_run: string }) =>
+          (t: TaskSnapshotRow) =>
             `- [${t.id}] ${t.prompt.slice(0, 50)}... (${t.schedule_type}: ${t.schedule_value}) - ${t.status}, next: ${t.next_run || 'N/A'}`,
         )
         .join('\n');
